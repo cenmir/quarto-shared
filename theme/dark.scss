@@ -1,0 +1,128 @@
+/*-- scss:defaults --*/
+// Base document colors
+$body-color: #c4c4c4;
+$sidebar-bg: #222222;
+$sidebar-fg: #c9ffbf;
+$code-bg: #323232;
+$code-color:  var(--bs-body-color);
+$headings-color: #d5d69d;
+//##c9ffbf
+
+.header-section-number {
+    color: #d5d69d !important;
+}
+
+figcaption {
+    text-align: center;
+}
+
+// hint callout
+.hintFrame {
+    font-weight: 600;
+    background-color: rgb(92 140 205);
+    border-radius: 8px;
+    padding-left: 0.3em;
+    padding: 6px 6px;
+    color: #c4c4c4;
+    margin-block-end: 2em;
+    margin-block-start: 2em;
+}
+
+.hintFrame::before {
+    content: "Hint!";
+    color: #212529;
+    margin-top: 0px;
+    font-weight: 400;
+    font-size: 1.2em;
+    font-family: Vollkorn, sans-serif;
+}
+
+.hintInnerFrame {
+    color: black;
+    background-color: #2a4973;
+    border-radius: 2px;
+    padding: 0.1em 0.8em;
+    text-align: center;
+    margin-top: 0.0em;
+
+}
+
+.hintInnerFrame * {
+    filter: blur(0.25rem);
+    transition: 0.3s;
+    color: $body-color;
+}
+
+.hintFrame:focus-within .hintInnerFrame *, .hintFrame:hover .hintInnerFrame *  {
+    filter: blur(0rem);
+}
+
+figure {
+    text-align: center;
+    margin: auto;
+}
+figure img[src*=".svg"] {
+    width: 300px !important;  /* Force width to 300px */
+    height: auto !important;  /* Ensure aspect ratio is maintained */
+}
+
+
+.important{
+    //background-color: rgb(190, 190, 0);
+    //border-color: rgb(122, 122, 0);
+    //border-width: 3px;
+    border-radius: 5px;
+    padding: 0.5em;
+    margin: 1em 0em;
+    background: hsl(159, 58%, 27%);
+    color: hsl(0, 0%, 85%);
+
+}
+
+
+.tooltip-container {
+    position: relative;
+    display: inline-block;
+    cursor: pointer;
+}
+
+.tooltip-text {
+    color: #c4c5b6;
+}
+
+.tooltip-tip {
+    visibility: hidden;
+    //width: 120px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    text-align: center;
+    border-radius: 5px;
+    padding: 3px 3px;
+    position: absolute;
+    z-index: 1;
+    bottom: 125%; /* Position the tooltip above the text */
+    left: 50%;
+    margin-left: -60px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.tooltip-container:hover .tooltip-tip {
+    visibility: visible;
+    opacity: 1;
+}
+
+.emphasis {
+    color: yellow;
+}
+
+.white-bg img {
+    background-color: white;
+    color: black;
+    padding: 0.2em;
+}
+
+figcaption {
+    text-align: center;
+    color: $body-color !important;
+}

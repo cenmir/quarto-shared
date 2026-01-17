@@ -1,0 +1,190 @@
+/*-- scss:defaults --*/
+
+//$font-family-base: "Computer Modern Serif", Times, serif;
+//$font-family-sans-serif: "Computer Modern Serif", Times, serif;
+//$headings-font-family: "Computer Modern Serif", Times, serif;
+
+.content {
+    font-family: "Computer Modern Serif", Times, serif;
+    font-size: 16px;
+    line-height: 1.5;
+
+}
+
+h1, h2, h3, h4, h5, h6 {
+    opacity: 1 !important;
+}
+
+.welcomeContent {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1rem;
+    margin-block: 3rem 4rem;
+    margin-inline: auto;
+    width: 100%;
+    border-radius: 2px;
+    border-color: #C9FFBF;
+}
+
+.welcomeContent img {
+    width: 100%;
+    object-fit: cover;
+    overflow-clip-margin: content-box;
+    overflow: clip;
+    transition: opacity 0.3s;
+    height: 20rem;
+    padding-left: 0;
+    margin: 0 0 0;
+    border-radius: 0;
+}
+
+.welcomeContent img:hover, .welcomeContent img:focus, .welcomeContent img:active{
+    opacity: 0.8;
+}
+
+.cell-output, .cell-output-display, .cell-output-markdown, .cell-output-display:not(.no-overflow-x), .knitsql-table:not(.no-overflow-x)  {
+    overflow: visible !important;
+}
+
+/* Change Python comment color */
+.co {
+    color: #888888 !important; /* Adjust to a softer gray */
+    font-style: italic; /* Optional: Make comments italic */
+}
+
+.quarto-figure img {
+    border-radius: 5px;
+}
+
+.img-fluid {
+    border-radius: 5px;
+}
+
+.note {
+    //margin-top: 1.5em;
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    background-color: aliceblue;
+    border-radius: 5px;
+    margin-bottom: 1em;
+}
+
+.note .title {
+    font-size: 105%;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+    padding-left: 7px;
+    padding-top: 2px;
+    color: white;
+    background: cornflowerblue;
+}
+
+.note .content {
+    padding: 10px;
+    margin-left: 0;
+    color: #212121;
+}
+
+/*
+.note .content p {
+    //margin: 0;
+}
+*/
+
+.note .content code {
+    background-color: hsl(210, 27%, 88%);
+    color: #212121;
+}
+
+.Remark {
+    // border-bottom: 1px solid var(--bs-body-color);
+    margin-top: 2rem;
+    margin-bottom: 2rem;
+    counter-increment: remark;
+    padding-bottom: 3rem;
+
+}
+
+.Remark::before {
+    content: "Remark " counter(remark) ": ";
+    font-style: italic;
+    display: block;
+    // border-top: 1px solid var(--bs-body-color);
+}
+
+.Remark::after {
+    font-size: 1em;
+    content: "□";
+    display: block;
+    text-align: right;
+}
+
+
+.cell-output-display,
+figure {
+    img[src*=".svg"] {
+        width: 100% !important;
+        height: auto !important;
+        max-width: 100% !important;
+    }
+}
+
+.size-100 figure img[src*=".svg"] { width: 100% !important; }
+.size-90 figure img[src*=".svg"] { width: 90% !important; }
+.size-80 figure img[src*=".svg"] { width: 80% !important; }
+.size-50 figure img[src*=".svg"] { width: 50% !important; }
+.size-full figure img[src*=".svg"] { width: 100% !important; }
+.size-small figure img[src*=".svg"] { width: 200px !important; }
+
+
+.Example {
+    // border-bottom: 1px solid var(--bs-body-color);
+    margin-top: 2rem;
+    margin-bottom: 3rem;
+    counter-increment: example;
+    padding-bottom: 3rem;
+
+}
+
+.Example::before {
+    content: "Example " counter(example) ": ";
+    font-style: italic;
+    display: block;
+    // border-top: 1px solid var(--bs-body-color);
+}
+
+.Example::after {
+    font-size: 1em;
+    content: "◊";
+    float: right;
+}
+
+.theorem::after {
+    content: "■";
+    display: block;
+    text-align: right;
+    margin-bottom: 1rem;
+}
+
+.theorem.example::after{
+    font-size: 1em;
+    content: "◊";
+    display: block;
+    text-align: right;
+    margin-bottom: 1rem;
+}
+
+.proof.remark::after{
+    font-size: 1em;
+    content: "□";
+    display: block;
+    text-align: right;
+}
+
+.proof::after {
+    font-size: 1em;
+    content: "□";
+    display: block;
+    text-align: right;
+}

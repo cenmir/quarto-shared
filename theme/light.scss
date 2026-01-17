@@ -1,0 +1,63 @@
+/*-- scss:defaults --*/
+// Base document colors
+
+$body-color: #212529;
+
+figcaption {
+    text-align: center;
+}
+
+// hint callout
+.hintFrame {
+    font-weight: 600;
+    background-color: #94b6e2;
+    border-radius: 8px;
+    padding-left: 0.3em;
+    padding: 6px 6px;
+    color: #c4c4c4;
+    margin-block-end: 2em;
+    margin-block-start: 2em;
+}
+
+.hintFrame::before {
+    content: "Hint!";
+    color: $body-color;
+    margin-top: 0px;
+    font-weight: 400;
+    font-size: 1.2em;
+    font-family: Vollkorn, sans-serif;
+}
+
+.hintInnerFrame {
+    color: black;
+    background-color: #d6e3f4;
+    border-radius: 2px;
+    padding: 0.1em 0.8em;
+    text-align: center;
+    margin-top: 0.0em;
+
+}
+
+.hintInnerFrame * {
+    filter: blur(0.25rem);
+    transition: 0.3s;
+    color: $body-color;
+}
+
+.hintFrame:focus-within .hintInnerFrame *, .hintFrame:hover .hintInnerFrame *  {
+    filter: blur(0rem);
+}
+
+.emphasis {
+    color: orangered;
+}
+
+.important {
+    border-radius: 5px;
+    padding: 0.5em;
+    margin: 1em 0em;
+    /* Light, pastel version of the original hue */
+    background: hsl(159, 60%, 92%);
+    /* Dark, desaturated version of the hue for high contrast */
+    color: hsl(159, 40%, 20%);
+}
