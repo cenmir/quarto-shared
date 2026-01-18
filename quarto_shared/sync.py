@@ -13,6 +13,7 @@ from typing import Dict, List, Tuple
 SHARED_ROOT = Path(__file__).parent.parent.resolve()
 
 # Files to sync, organized by source directory -> target location
+# Files go to project root unless source dir is in PRESERVE_SUBDIR
 SYNC_MAP = {
     "theme": [
         "dark.scss",
@@ -33,6 +34,9 @@ SYNC_MAP = {
     ],
 }
 
+# Source directories that should preserve their subdir in the target project
+PRESERVE_SUBDIR = {"js"}
+
 
 def file_hash(path: Path) -> str:
     """Compute MD5 hash of a file."""
@@ -41,11 +45,25 @@ def file_hash(path: Path) -> str:
     return hashlib.md5(path.read_bytes()).hexdigest()
 
 
-def get_sync_status(project_dir: Path) -> Dict[str, Tuple[str, str, bool]]:
+def get_target_path(project_dir: Path, source_subdir: str, filename: str) -> Path:
+    """Get the target path for a file in the project directory."""
+    if source_subdir in PRESERVE_SUBDIR:
+        return project_dir / source_subdir / filename
+    return project_dir / filename
+
+
+def get_display_name(source_subdir: str, filename: str) -> str:
+    """Get display name for a file (includes subdir if preserved)."""
+    if source_subdir in PRESERVE_SUBDIR:
+        return f"{source_subdir}/{filename}"
+    return filename
+
+
+def get_sync_status(project_dir: Path) -> Dict[str, Tuple[str, str, bool, str]]:
     """
     Compare files between quarto-shared and project.
 
-    Returns dict mapping filename -> (shared_hash, project_hash, differs)
+    Returns dict mapping display_name -> (shared_hash, project_hash, differs, source_subdir)
     """
     project_dir = Path(project_dir).resolve()
     status = {}
@@ -53,14 +71,14 @@ def get_sync_status(project_dir: Path) -> Dict[str, Tuple[str, str, bool]]:
     for source_subdir, files in SYNC_MAP.items():
         for filename in files:
             shared_path = SHARED_ROOT / source_subdir / filename
-            # All synced files go to project root
-            project_path = project_dir / filename
+            project_path = get_target_path(project_dir, source_subdir, filename)
 
             shared_hash = file_hash(shared_path)
             project_hash = file_hash(project_path)
             differs = shared_hash != project_hash
 
-            status[filename] = (shared_hash, project_hash, differs)
+            display_name = get_display_name(source_subdir, filename)
+            status[display_name] = (shared_hash, project_hash, differs, source_subdir)
 
     return status
 
@@ -68,19 +86,19 @@ def get_sync_status(project_dir: Path) -> Dict[str, Tuple[str, str, bool]]:
 def has_changes(project_dir: Path) -> bool:
     """Check if any theme files differ between quarto-shared and project."""
     status = get_sync_status(project_dir)
-    return any(differs for _, _, differs in status.values())
+    return any(differs for _, _, differs, _ in status.values())
 
 
 def get_changed_files(project_dir: Path) -> List[str]:
-    """Get list of files that differ."""
+    """Get list of files that differ (returns display names)."""
     status = get_sync_status(project_dir)
-    return [name for name, (_, _, differs) in status.items() if differs]
+    return [name for name, (_, _, differs, _) in status.items() if differs]
 
 
 def print_diff_summary(project_dir: Path) -> None:
     """Print a summary of what differs."""
     status = get_sync_status(project_dir)
-    changed = [(name, sh, ph) for name, (sh, ph, differs) in status.items() if differs]
+    changed = [(name, sh, ph) for name, (sh, ph, differs, _) in status.items() if differs]
 
     if not changed:
         print("All theme files are in sync.")
@@ -103,7 +121,7 @@ def apply(project_dir: Path, files: List[str] = None, dry_run: bool = False) -> 
 
     Args:
         project_dir: Path to the Quarto project
-        files: Specific files to sync (default: all changed files)
+        files: Specific files to sync (default: all changed files, as display names)
         dry_run: If True, just report what would be done
 
     Returns:
@@ -119,32 +137,35 @@ def apply(project_dir: Path, files: List[str] = None, dry_run: bool = False) -> 
 
     copied = []
 
-    # Build reverse map: filename -> source subdir
-    file_to_subdir = {}
+    # Build reverse map: display_name -> (source_subdir, filename)
+    display_to_info = {}
     for subdir, filenames in SYNC_MAP.items():
         for filename in filenames:
-            file_to_subdir[filename] = subdir
+            display_name = get_display_name(subdir, filename)
+            display_to_info[display_name] = (subdir, filename)
 
-    for filename in files:
-        if filename not in file_to_subdir:
-            print(f"  Warning: {filename} not in sync map, skipping")
+    for display_name in files:
+        if display_name not in display_to_info:
+            print(f"  Warning: {display_name} not in sync map, skipping")
             continue
 
-        subdir = file_to_subdir[filename]
+        subdir, filename = display_to_info[display_name]
         source = SHARED_ROOT / subdir / filename
-        dest = project_dir / filename
+        dest = get_target_path(project_dir, subdir, filename)
 
         if not source.exists():
             print(f"  Warning: {source} does not exist, skipping")
             continue
 
         if dry_run:
-            print(f"  Would copy: {filename}")
+            print(f"  Would copy: {display_name}")
         else:
+            # Create parent directory if needed
+            dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, dest)
-            print(f"  Copied: {filename}")
+            print(f"  Copied: {display_name}")
 
-        copied.append(filename)
+        copied.append(display_name)
 
     return copied
 
