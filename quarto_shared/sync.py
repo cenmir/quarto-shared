@@ -28,6 +28,9 @@ SYNC_MAP = {
         "footer.html",
         "elsevier-vancouver.csl",
     ],
+    "js": [
+        "sidebar-state.js",
+    ],
 }
 
 
