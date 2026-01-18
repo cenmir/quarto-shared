@@ -180,22 +180,16 @@ def render_files(config: BuildConfig, files: List[Path]) -> bool:
 
 
 def run_post_processing(config: BuildConfig) -> bool:
-    """Run post-processing if configured."""
+    """Run post-processing to fix chapter numbering for books with parts."""
+    # Use custom post-processor if configured
     if config.post_process:
-        log("Running post-processing...")
+        log("Running custom post-processing...")
         return config.post_process()
 
-    # Default: look for postProcessing.py in project root
-    post_script = config.project_root / "postProcessing.py"
-    if post_script.exists():
-        log("Running post-processing (postProcessing.py)...")
-        result = subprocess.run(
-            [sys.executable, str(post_script)],
-            cwd=config.project_root
-        )
-        return result.returncode == 0
-
-    return True
+    # Use built-in postprocess module
+    log("Running post-processing (chapter renumbering)...")
+    from . import postprocess
+    return postprocess.run(config.project_root, config.book_dir)
 
 
 def set_permissions(config: BuildConfig) -> bool:
@@ -247,6 +241,7 @@ class BuildOptions:
     no_render: bool = False
     dry_run: bool = False
     git: bool = False
+    deploy_only: bool = False  # Skip render, just post-process and deploy
 
 
 def run(config: BuildConfig, options: BuildOptions = None) -> bool:
@@ -273,9 +268,9 @@ def run(config: BuildConfig, options: BuildOptions = None) -> bool:
         book_files = get_book_files(config, quarto_config)
         log(f"Found {len(book_files)} book files in _quarto.yml")
 
-        # Skip rendering if --no-render is set
-        if options.no_render:
-            log("Skipping quarto render (--no-render)")
+        # Skip rendering if --no-render or --deploy-only is set
+        if options.no_render or options.deploy_only:
+            log("Skipping quarto render" + (" (--deploy-only)" if options.deploy_only else " (--no-render)"))
             # Prompt for sudo password upfront if deploying
             if not options.no_deploy:
                 subprocess.run(['sudo', '-v'])

@@ -4,6 +4,7 @@ quarto_shared - Shared infrastructure for Quarto book projects.
 This package provides:
 - sync: Utilities to sync theme files from quarto-shared to projects
 - build: Shared incremental build logic for Quarto projects
+- postprocess: Fix chapter numbering for books using part: structure
 - init_book: Initialize new Quarto book projects
 
 Usage:
@@ -14,8 +15,9 @@ Usage:
     from quarto_shared import sync, build
 """
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 from . import sync
 from . import build
+from . import postprocess
 from . import init_book

@@ -42,6 +42,7 @@ quarto-shared/
     ├── __init__.py
     ├── sync.py         # Sync theme files to projects
     ├── build.py        # Shared incremental build logic
+    ├── postprocess.py  # Fix chapter numbering for books with parts
     └── init_book.py    # Initialize new projects
 ```
 
@@ -233,12 +234,47 @@ format:
     number-sections: true
 ```
 
+## Architecture
+
+### What Gets Synced (Static Files)
+
+The `sync` module copies **static asset files** to each project:
+- SCSS themes (`dark.scss`, `light.scss`, `custom.scss`)
+- Lua filters (`hint.lua`, `color-emphasis.lua`, `lastModified.lua`)
+- HTML includes (`footer.html`)
+- JavaScript (`js/sidebar-state.js`)
+
+These files are copied to each project directory and must be synced when updated.
+
+### What Runs from quarto-shared (Python Logic)
+
+The **Python code** (`build.py`, `sync.py`, `postprocess.py`) is **never copied** to projects.
+Instead, each project's `publish.py` imports directly from `~/quarto-shared`:
+
+```python
+sys.path.insert(0, str(Path.home() / "quarto-shared"))
+from quarto_shared import sync, build
+```
+
+This means:
+- When you update Python code in quarto-shared, **all projects automatically get the new logic**
+- No need to sync or copy Python files
+- Single source of truth for build logic
+
+### Post-Processing (Chapter Renumbering)
+
+When using Quarto's `part:` structure, Quarto numbers chapters sequentially (1, 2, 3, ...)
+instead of hierarchically (1.1, 1.2, 2.1, ...). The `postprocess` module automatically
+fixes this after each build.
+
+This runs automatically via `build.py` - no per-project configuration needed.
+
 ## Dependencies
 
 - Python 3.8+
 - PyYAML (`pip install pyyaml`)
+- beautifulsoup4 and lxml (`pip install beautifulsoup4 lxml`) - for chapter renumbering
 - Quarto CLI
-- beautifulsoup4 and lxml (for postProcessing.py in each project)
 
 ## License
 
