@@ -188,3 +188,13 @@ figure {
     display: block;
     text-align: right;
 }
+
+/* Fix ANSI color highlighting in tracebacks - yellow background with dark text */
+.ansi-yellow-bg {
+    background-color: #ffff00 !important;
+    color: #000000 !important;
+}
+
+.ansi-yellow-intense-fg {
+    color: #808000 !important;
+}
