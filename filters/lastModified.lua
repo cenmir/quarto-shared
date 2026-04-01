@@ -10,6 +10,7 @@ local function get_last_modified_date(filepath)
     end
 
     local handle = io.popen(command, "r")
+    if not handle then return "Unknown" end
     local result = handle:read("*a")
     handle:close()
 

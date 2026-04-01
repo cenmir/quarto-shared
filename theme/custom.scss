@@ -121,14 +121,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 
-.cell-output-display,
-figure {
-    img[src*=".svg"] {
-        width: 100% !important;
-        height: auto !important;
-        max-width: 100% !important;
-    }
-}
+
 
 .size-100 figure img[src*=".svg"] { width: 100% !important; }
 .size-90 figure img[src*=".svg"] { width: 90% !important; }

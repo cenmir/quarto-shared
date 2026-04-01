@@ -97,21 +97,33 @@ def get_changed_files(project_dir: Path) -> List[str]:
 
 def print_diff_summary(project_dir: Path) -> None:
     """Print a summary of what differs."""
+    project_dir = Path(project_dir).resolve()
     status = get_sync_status(project_dir)
-    changed = [(name, sh, ph) for name, (sh, ph, differs, _) in status.items() if differs]
+    changed = [(name, sh, ph, sd) for name, (sh, ph, differs, sd) in status.items() if differs]
 
     if not changed:
         print("All theme files are in sync.")
         return
 
     print(f"\n{len(changed)} file(s) differ from quarto-shared:\n")
-    for name, shared_hash, project_hash in changed:
+    for name, shared_hash, project_hash, source_subdir in changed:
         if not project_hash:
             print(f"  + {name} (new file)")
         elif not shared_hash:
             print(f"  ? {name} (not in quarto-shared)")
         else:
-            print(f"  ~ {name} (modified)")
+            # Determine which copy is newer
+            shared_path = SHARED_ROOT / source_subdir / name.split("/")[-1]
+            project_path = get_target_path(project_dir, source_subdir, name.split("/")[-1])
+            shared_mtime = shared_path.stat().st_mtime
+            project_mtime = project_path.stat().st_mtime
+            if shared_mtime > project_mtime:
+                hint = "quarto-shared is newer"
+            elif project_mtime > shared_mtime:
+                hint = "local is newer"
+            else:
+                hint = "modified"
+            print(f"  ~ {name} ({hint})")
     print()
 
 
