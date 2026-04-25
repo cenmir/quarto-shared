@@ -12,7 +12,7 @@ import json
 import re
 import yaml
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Iterable, List, Optional
 
 try:
     from bs4 import BeautifulSoup, NavigableString
@@ -24,6 +24,9 @@ except ImportError:
 def generate_numbering_map(project_root: Path) -> Optional[Dict[str, str]]:
     """
     Parse _quarto.yml to create a mapping of chapter files to hierarchical numbers.
+
+    Part-index files (e.g. ``Equilibrium/index.html``) map to the part number
+    only (``"5"``); chapter files map to the hierarchical number (``"5.1"``).
 
     Args:
         project_root: Path to the Quarto project root
@@ -58,6 +61,14 @@ def generate_numbering_map(project_root: Path) -> Optional[Dict[str, str]]:
 
         elif isinstance(item, dict) and 'part' in item:
             chapter_counter += 1  # A part starts a new chapter number
+            part_value = item.get('part')
+            # When `part:` points at a file (e.g. Equilibrium/index.qmd),
+            # map that html to the bare part number so the sidebar header
+            # and the part landing page get a "5" prefix.
+            if isinstance(part_value, str) and part_value.lower().endswith(('.qmd', '.ipynb', '.md')):
+                part_html = Path(part_value).with_suffix('.html').as_posix()
+                mapping[part_html] = f"{chapter_counter}"
+
             part_chapters = item.get('chapters', [])
             sub_chapter_counter = 1
             for sub_chapter in part_chapters:
@@ -70,25 +81,83 @@ def generate_numbering_map(project_root: Path) -> Optional[Dict[str, str]]:
     return mapping
 
 
-def post_process_html(book_dir: Path, numbering_map: Dict[str, str]) -> bool:
+def post_process_html(
+    book_dir: Path,
+    numbering_map: Dict[str, str],
+    files: Optional[Iterable[Path]] = None,
+) -> bool:
     """
-    Parse all HTML files in _book directory and fix chapter/section numbering.
+    Parse HTML files in _book directory and fix chapter/section numbering.
 
     Args:
         book_dir: Path to the _book output directory
         numbering_map: Dict mapping HTML filename to correct chapter number
+        files: Optional explicit list of HTML files to process (must be inside
+            book_dir). When None, walks the entire output dir. Used by the
+            post-render hook to process only the files Quarto just rendered.
 
     Returns:
         True on success, False on failure
     """
     book_dir_abs = book_dir.resolve()
-    print("  Processing HTML files...")
+    if files is None:
+        targets = sorted(book_dir.rglob('*.html'))
+    else:
+        targets = [Path(f) for f in files if Path(f).suffix == '.html']
+    print(f"  Processing {len(targets)} HTML file(s)...")
 
-    for file_path in book_dir.rglob('*.html'):
+    for file_path in targets:
         relative_path_posix = file_path.relative_to(book_dir).as_posix()
 
         with open(file_path, 'r', encoding='utf-8') as f:
             soup = BeautifulSoup(f, 'lxml')
+
+        # String-title parts (e.g. `part: "Preliminaries"` in _quarto.yml)
+        # have no href, so they can't be looked up in the numbering_map by
+        # path. Derive each part's number from the first chapter inside the
+        # section by resolving its href against numbering_map ("4.1" -> "4")
+        # and inject a chapter-number span. We use numbering_map directly
+        # rather than reading the chapter-number text already in the sidebar
+        # because at this point that text is still Quarto's raw global number.
+        for section_li in soup.select('#quarto-sidebar .sidebar-item-section'):
+            header_link = section_li.select_one(
+                '.sidebar-item-container > a.sidebar-link[data-bs-toggle="collapse"]'
+            )
+            if not header_link:
+                continue
+            menu_text = header_link.select_one('.menu-text')
+            if not menu_text:
+                continue
+
+            part_number = None
+            for child_link in section_li.select('ul.sidebar-section a.sidebar-link[href]'):
+                href = child_link.get('href', '')
+                if not href or href.startswith(('http://', 'https://', '#')):
+                    continue
+                try:
+                    target_abs = (file_path.parent / href).resolve(strict=False)
+                    lookup_key = target_abs.relative_to(book_dir_abs).as_posix().split('#')[0]
+                except ValueError:
+                    continue
+                if lookup_key in numbering_map:
+                    part_number = numbering_map[lookup_key].split('.')[0]
+                    break
+            if not part_number:
+                continue
+
+            existing_num = menu_text.select_one('.chapter-number')
+            if existing_num:
+                existing_num.string = part_number
+            else:
+                title_text = menu_text.get_text()
+                menu_text.clear()
+                num_span = soup.new_tag('span', attrs={'class': 'chapter-number'})
+                num_span.string = part_number
+                title_span_new = soup.new_tag('span', attrs={'class': 'chapter-title'})
+                title_span_new.string = title_text
+                menu_text.append(num_span)
+                menu_text.append(NavigableString('\xa0'))
+                menu_text.append(title_span_new)
 
         # Universal Sidebar and Nav Renumbering (applied to every page)
         for link in soup.select('#quarto-sidebar .sidebar-item-container > a.sidebar-link, .nav-page-previous a.pagination-link, .nav-page-next a.pagination-link'):
@@ -107,6 +176,22 @@ def post_process_html(book_dir: Path, numbering_map: Dict[str, str]) -> bool:
                         elif title_span and lookup_key not in numbering_map:
                             if link.select_one('.chapter-number'):
                                 link.select_one('.chapter-number').decompose()
+                        else:
+                            # Part header in the sidebar: Quarto emits
+                            # <span class="menu-text">Title</span> with no
+                            # chapter-number span. Inject one so parts get a
+                            # "5 Equilibrium" prefix matching their children.
+                            menu_text = link.select_one('.menu-text')
+                            if menu_text and not menu_text.select_one('.chapter-number'):
+                                title_text = menu_text.get_text()
+                                menu_text.clear()
+                                num_span = soup.new_tag('span', attrs={'class': 'chapter-number'})
+                                num_span.string = numbering_map[lookup_key]
+                                title_span_new = soup.new_tag('span', attrs={'class': 'chapter-title'})
+                                title_span_new.string = title_text
+                                menu_text.append(num_span)
+                                menu_text.append(NavigableString('\xa0'))
+                                menu_text.append(title_span_new)
                 except ValueError:
                     continue
 
@@ -408,15 +493,22 @@ def post_process_html(book_dir: Path, numbering_map: Dict[str, str]) -> bool:
     return True
 
 
-def run(project_root: Path, book_dir: Path) -> bool:
+def run(
+    project_root: Path,
+    book_dir: Path,
+    files: Optional[Iterable[Path]] = None,
+) -> bool:
     """
     Run post-processing on a Quarto book.
 
-    This is the main entry point called by build.py.
+    This is the main entry point called by build.py and the post-render hook.
 
     Args:
         project_root: Path to the Quarto project root (contains _quarto.yml)
         book_dir: Path to the _book output directory
+        files: Optional explicit list of HTML files to process. Used by the
+            quarto preview post-render hook for incremental updates. When None,
+            processes every HTML file under book_dir.
 
     Returns:
         True on success (or if no post-processing needed), False on failure
@@ -436,4 +528,4 @@ def run(project_root: Path, book_dir: Path) -> bool:
         print("  No part: structure found, skipping chapter renumbering")
         return True
 
-    return post_process_html(book_dir, numbering_map)
+    return post_process_html(book_dir, numbering_map, files=files)
