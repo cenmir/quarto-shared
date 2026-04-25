@@ -168,6 +168,11 @@ h1, h2, h3, h4, h5, h6 {
     margin-bottom: 1rem;
 }
 
+.proof.remark {
+    border-left: 2px solid rgba(128, 128, 128, 0.3);
+    padding-left: 1rem;
+}
+
 .proof.remark::after{
     font-size: 1em;
     content: "□";
@@ -191,3 +196,4 @@ h1, h2, h3, h4, h5, h6 {
 .ansi-yellow-intense-fg {
     color: #808000 !important;
 }
+
