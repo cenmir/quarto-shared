@@ -16,7 +16,7 @@ function Div(el)
 
 
   if el.classes:includes("notebox") then
-    local openTag = pandoc.RawBlock("html", '<div class="note"><div class="title">⚠ Note</div><div class="note content">')
+    local openTag = pandoc.RawBlock("html", '<div class="note"><div class="note-title">⚠ Note</div><div class="note-body">')
     local closeTag = pandoc.RawBlock("html", '</div></div>')
 
     local content = el.content or {}  -- Prevent nil errors
