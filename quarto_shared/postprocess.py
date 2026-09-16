@@ -21,6 +21,15 @@ except ImportError:
     HAS_BS4 = False
 
 
+# Quarto's numbered environments. Theorem-like ones render with a
+# `.theorem-title strong`; the proof-like ones (proof, remark, solution) render
+# with a `.proof-title em` instead, so both markups have to be renumbered.
+ENVIRONMENT_KEYWORDS = (
+    'Theorem|Lemma|Corollary|Proposition|Conjecture|Definition|'
+    'Example|Exercise|Solution|Remark|Algorithm|Proof'
+)
+
+
 def generate_numbering_map(project_root: Path) -> Optional[Dict[str, str]]:
     """
     Parse _quarto.yml to create a mapping of chapter files to hierarchical numbers.
@@ -205,6 +214,56 @@ def post_process_html(
                 f.write(str(soup))
             continue
 
+        # Universal xref rewrite: runs on every page once correct_number is
+        # known, so it also patches xrefs on pages where chapter renumbering
+        # was already applied in a previous run (the per-target lookup later
+        # in this function is gated behind a "skip if already renumbered"
+        # check). Two cases this fallback handles:
+        #   (a) Sections without data-number (e.g. number-depth: 1), where
+        #       Quarto's xref text is "Section <quarto-chapter>.<n>" but the
+        #       target heading carries no data-number for the loop below to
+        #       pick up.
+        #   (b) Cross-page xrefs (href like "Other.html#anchor"), which the
+        #       loop below skips because it only follows "#"-prefixed hrefs.
+        # In both cases the visible text is "Keyword <chapter>.<rest>" and
+        # we swap the chapter portion for the correct hierarchical number
+        # (this page's correct_number for intra-page, numbering_map[target]
+        # for cross-page). Idempotent: skips xrefs whose chapter already
+        # matches target_correct.
+        chapter_pattern = re.compile(r'^([A-Za-z\.]+[\s\xa0]+)?(\d+)((?:\.\d+)*)$')
+        for xref in soup.select('a.quarto-xref'):
+            href = xref.get('href')
+            if not href:
+                continue
+            number_span = xref.select_one('span')
+            if not (number_span and number_span.string):
+                continue
+            current_span_text = number_span.string
+
+            if href.startswith('#'):
+                target_correct = correct_number
+            else:
+                try:
+                    target_abs = (file_path.parent / href).resolve(strict=False)
+                    lookup_key = target_abs.relative_to(book_dir_abs).as_posix().split('#')[0]
+                except ValueError:
+                    continue
+                target_correct = numbering_map.get(lookup_key)
+            if not target_correct:
+                continue
+
+            m = chapter_pattern.match(current_span_text)
+            if not m:
+                continue
+            keyword_prefix = m.group(1) or ''
+            existing_number = current_span_text[len(keyword_prefix):]
+            if existing_number == target_correct or existing_number.startswith(target_correct + '.'):
+                continue
+            rest = m.group(3)
+            new_text = f"{keyword_prefix}{target_correct}{rest}"
+            if new_text != current_span_text:
+                number_span.string = new_text
+
         # Determine the incorrect number from the first section found
         first_section = soup.select_one('section[data-number]')
         incorrect_number = None
@@ -307,12 +366,26 @@ def post_process_html(
         for theorem_title in soup.select('.theorem-title strong'):
             original_text = theorem_title.get_text(strip=True)
             new_text = re.sub(
-                rf'^(Theorem|Lemma|Corollary|Proposition|Conjecture|Definition|Example|Exercise|Solution|Remark|Algorithm)([\s\xa0]+){re.escape(incorrect_number)}\.',
+                rf'^({ENVIRONMENT_KEYWORDS})([\s\xa0]+){re.escape(incorrect_number)}\.',
                 rf'\g<1>\g<2>{correct_number}.',
                 original_text
             )
             if new_text != original_text:
                 theorem_title.string = new_text
+
+        # Update proof-like environment titles (proof, remark, solution). The
+        # number sits inside an <em> and the trailing period outside it, so the
+        # text to rewrite is "Remark 12.3" with no terminal dot.
+        for proof_title in soup.select('.proof-title'):
+            title_node = proof_title.find('em') or proof_title
+            original_text = title_node.get_text(strip=True)
+            new_text = re.sub(
+                rf'^({ENVIRONMENT_KEYWORDS})([\s\xa0]+){re.escape(incorrect_number)}\.',
+                rf'\g<1>\g<2>{correct_number}.',
+                original_text
+            )
+            if new_text != original_text:
+                title_node.string = new_text
 
         # Update MathJax equation numbers
         for math_span in soup.select('span.math.display'):
@@ -392,8 +465,21 @@ def post_process_html(
                 if theorem_title:
                     title_text = theorem_title.get_text(strip=True)
                     match = re.search(
-                        rf'^(?:Theorem|Lemma|Corollary|Proposition|Conjecture|Definition|Example|Exercise|Solution|Remark|Algorithm)[\s\xa0]+({re.escape(correct_number)}\.\d+)',
+                        rf'^(?:{ENVIRONMENT_KEYWORDS})[\s\xa0]+({re.escape(correct_number)}\.\d+)',
                         title_text
+                    )
+                    if match:
+                        correct_target_number = match.group(1)
+            elif 'proof' in target_element.get('class', []):
+                # Read the number back from the title fixed above. Without this
+                # branch the fallback below would descend into the environment
+                # and pick up the tag of the first equation inside it.
+                proof_title = target_element.select_one('.proof-title')
+                if proof_title:
+                    title_node = proof_title.find('em') or proof_title
+                    match = re.search(
+                        rf'^(?:{ENVIRONMENT_KEYWORDS})[\s\xa0]+({re.escape(correct_number)}\.\d+)',
+                        title_node.get_text(strip=True)
                     )
                     if match:
                         correct_target_number = match.group(1)
