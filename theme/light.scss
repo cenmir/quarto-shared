@@ -35,16 +35,15 @@ figcaption {
     padding: 0.1em 0.8em;
     text-align: center;
     margin-top: 0.0em;
-
+    filter: blur(0.25rem);
+    transition: filter 0.3s;
 }
 
 .hintInnerFrame * {
-    filter: blur(0.25rem);
-    transition: 0.3s;
     color: $body-color;
 }
 
-.hintFrame:focus-within .hintInnerFrame *, .hintFrame:hover .hintInnerFrame *  {
+.hintFrame:focus-within .hintInnerFrame, .hintFrame:hover .hintInnerFrame {
     filter: blur(0rem);
 }
 

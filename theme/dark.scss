@@ -1,6 +1,6 @@
 /*-- scss:defaults --*/
 // Base document colors
-$body-color: #c4c4c4;
+$body-color: #d6d6d6;
 $sidebar-bg: #222222;
 $sidebar-fg: #c9ffbf;
 $code-bg: #323232;
@@ -10,6 +10,15 @@ $headings-color: #d5d69d;
 
 .header-section-number {
     color: #d5d69d !important;
+}
+
+.sidebar-section .sidebar-link {
+    color: #fff;
+}
+
+div.sidebar-item-container .sidebar-link.active {
+    color: #fff;
+    font-weight: bold;
 }
 
 figcaption {
@@ -44,16 +53,15 @@ figcaption {
     padding: 0.1em 0.8em;
     text-align: center;
     margin-top: 0.0em;
-
+    filter: blur(0.25rem);
+    transition: filter 0.3s;
 }
 
 .hintInnerFrame * {
-    filter: blur(0.25rem);
-    transition: 0.3s;
     color: $body-color;
 }
 
-.hintFrame:focus-within .hintInnerFrame *, .hintFrame:hover .hintInnerFrame *  {
+.hintFrame:focus-within .hintInnerFrame, .hintFrame:hover .hintInnerFrame {
     filter: blur(0rem);
 }
 
@@ -121,7 +129,11 @@ img[src$=".svg"] {
     color: yellow;
 }
 
-.white-bg img {
+// Transparent line art disappears on the dark theme. Quarto puts the class on
+// the wrapping div when the figure is a div or is fig-aligned, and on the img
+// itself when it is written as an attribute on the image, so match both.
+.white-bg img,
+img.white-bg {
     background-color: white;
     color: black;
     padding: 0.2em;
