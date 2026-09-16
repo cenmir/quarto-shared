@@ -31,6 +31,7 @@ SYNC_MAP = {
     ],
     "js": [
         "sidebar-state.js",
+        "welcome-gallery.js",
     ],
 }
 
