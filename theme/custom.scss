@@ -17,29 +17,69 @@ h1, h2, h3, h4, h5, h6 {
 
 .welcomeContent {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 1rem;
-    margin-block: 3rem 4rem;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin-block: 2rem 3rem;
     margin-inline: auto;
     width: 100%;
-    border-radius: 2px;
-    border-color: #C9FFBF;
+    /* the hover preview grows out of the grid, so nothing may clip it */
+    overflow: visible;
 }
 
-.welcomeContent img {
+.welcomeContent img, .welcomeContent video {
     width: 100%;
+    height: auto;
+    aspect-ratio: 4 / 3;
     object-fit: cover;
-    overflow-clip-margin: content-box;
-    overflow: clip;
-    transition: opacity 0.3s;
-    height: 20rem;
+    display: block;
     padding-left: 0;
-    margin: 0 0 0;
-    border-radius: 0;
+    margin: 0;
+    border-radius: 3px;
+    position: relative;
+    z-index: 0;
+    cursor: zoom-in;
+    transition: transform 0.25s ease, box-shadow 0.25s ease, z-index 0s;
 }
 
-.welcomeContent img:hover, .welcomeContent img:focus, .welcomeContent img:active{
-    opacity: 0.8;
+/* Hover preview: the tile grows in place and lifts above its neighbours.
+   Only on devices that actually have a pointer, so tapping does nothing odd. */
+@media (hover: hover) and (pointer: fine) {
+    .welcomeContent img:hover, .welcomeContent img:focus-visible,
+    .welcomeContent video:hover, .welcomeContent video:focus-visible {
+        transform: scale(2.05);
+        z-index: 10;
+        box-shadow: 0 0.6rem 2rem rgba(0, 0, 0, 0.45);
+        border-radius: 4px;
+    }
+
+    /* Grow away from the page edges rather than off them */
+    .welcomeContent > :nth-child(3n + 1):hover,
+    .welcomeContent > :nth-child(3n + 1):focus-visible { transform-origin: left center; }
+    .welcomeContent > :nth-child(3n + 2):hover,
+    .welcomeContent > :nth-child(3n + 2):focus-visible { transform-origin: center center; }
+    .welcomeContent > :nth-child(3n):hover,
+    .welcomeContent > :nth-child(3n):focus-visible { transform-origin: right center; }
+}
+
+/* Sticky zoom, set by a click or a tap, so the preview also works without a pointer */
+.welcomeContent img.zoomed, .welcomeContent video.zoomed {
+    transform: scale(2.05);
+    z-index: 11;
+    box-shadow: 0 0.6rem 2rem rgba(0, 0, 0, 0.45);
+    border-radius: 4px;
+    cursor: zoom-out;
+}
+
+.welcomeContent > :nth-child(3n + 1).zoomed { transform-origin: left center; }
+.welcomeContent > :nth-child(3n + 2).zoomed { transform-origin: center center; }
+.welcomeContent > :nth-child(3n).zoomed { transform-origin: right center; }
+
+@media (max-width: 900px) {
+    .welcomeContent { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .welcomeContent img, .welcomeContent video { transition: none; }
 }
 
 .cell-output, .cell-output-display, .cell-output-markdown, .cell-output-display:not(.no-overflow-x), .knitsql-table:not(.no-overflow-x)  {
