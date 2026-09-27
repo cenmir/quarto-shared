@@ -90,6 +90,63 @@ def generate_numbering_map(project_root: Path) -> Optional[Dict[str, str]]:
     return mapping
 
 
+def _rewrite_xrefs(soup, file_path: Path, book_dir_abs: Path,
+                   numbering_map: Dict[str, str], correct_number: Optional[str]) -> None:
+    """Give every cross-reference on the page the hierarchical number of its target.
+
+    Runs on every page, including pages outside the numbering map (an appendix,
+    say): those have no correct_number, so only their links to other pages are
+    rewritten.
+    """
+    # This also patches xrefs on pages whose chapter renumbering was applied
+    # in a previous run (the per-target lookup in post_process_html is gated
+    # behind a "skip if already renumbered" check). Two cases it handles:
+    #   (a) Sections without data-number (e.g. number-depth: 1), where
+    #       Quarto's xref text is "Section <quarto-chapter>.<n>" but the
+    #       target heading carries no data-number for that lookup to
+    #       pick up.
+    #   (b) Cross-page xrefs (href like "Other.html#anchor"), which that
+    #       lookup skips because it only follows "#"-prefixed hrefs.
+    # In both cases the visible text is "Keyword <chapter>.<rest>" and
+    # we swap the chapter portion for the correct hierarchical number
+    # (this page's correct_number for intra-page, numbering_map[target]
+    # for cross-page). Idempotent: skips xrefs whose chapter already
+    # matches target_correct.
+    chapter_pattern = re.compile(r'^([A-Za-z\.]+[\s\xa0]+)?(\d+)((?:\.\d+)*)$')
+    for xref in soup.select('a.quarto-xref'):
+        href = xref.get('href')
+        if not href:
+            continue
+        number_span = xref.select_one('span')
+        if not (number_span and number_span.string):
+            continue
+        current_span_text = number_span.string
+
+        if href.startswith('#'):
+            target_correct = correct_number
+        else:
+            try:
+                target_abs = (file_path.parent / href).resolve(strict=False)
+                lookup_key = target_abs.relative_to(book_dir_abs).as_posix().split('#')[0]
+            except ValueError:
+                continue
+            target_correct = numbering_map.get(lookup_key)
+        if not target_correct:
+            continue
+
+        m = chapter_pattern.match(current_span_text)
+        if not m:
+            continue
+        keyword_prefix = m.group(1) or ''
+        existing_number = current_span_text[len(keyword_prefix):]
+        if existing_number == target_correct or existing_number.startswith(target_correct + '.'):
+            continue
+        rest = m.group(3)
+        new_text = f"{keyword_prefix}{target_correct}{rest}"
+        if new_text != current_span_text:
+            number_span.string = new_text
+
+
 def post_process_html(
     book_dir: Path,
     numbering_map: Dict[str, str],
@@ -206,6 +263,7 @@ def post_process_html(
 
         # Page-Specific Renumbering
         correct_number = numbering_map.get(relative_path_posix)
+        _rewrite_xrefs(soup, file_path, book_dir_abs, numbering_map, correct_number)
         if not correct_number:
             main_title_span = soup.select_one('#quarto-document-content h1.title .chapter-number')
             if main_title_span:
@@ -213,56 +271,6 @@ def post_process_html(
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(str(soup))
             continue
-
-        # Universal xref rewrite: runs on every page once correct_number is
-        # known, so it also patches xrefs on pages where chapter renumbering
-        # was already applied in a previous run (the per-target lookup later
-        # in this function is gated behind a "skip if already renumbered"
-        # check). Two cases this fallback handles:
-        #   (a) Sections without data-number (e.g. number-depth: 1), where
-        #       Quarto's xref text is "Section <quarto-chapter>.<n>" but the
-        #       target heading carries no data-number for the loop below to
-        #       pick up.
-        #   (b) Cross-page xrefs (href like "Other.html#anchor"), which the
-        #       loop below skips because it only follows "#"-prefixed hrefs.
-        # In both cases the visible text is "Keyword <chapter>.<rest>" and
-        # we swap the chapter portion for the correct hierarchical number
-        # (this page's correct_number for intra-page, numbering_map[target]
-        # for cross-page). Idempotent: skips xrefs whose chapter already
-        # matches target_correct.
-        chapter_pattern = re.compile(r'^([A-Za-z\.]+[\s\xa0]+)?(\d+)((?:\.\d+)*)$')
-        for xref in soup.select('a.quarto-xref'):
-            href = xref.get('href')
-            if not href:
-                continue
-            number_span = xref.select_one('span')
-            if not (number_span and number_span.string):
-                continue
-            current_span_text = number_span.string
-
-            if href.startswith('#'):
-                target_correct = correct_number
-            else:
-                try:
-                    target_abs = (file_path.parent / href).resolve(strict=False)
-                    lookup_key = target_abs.relative_to(book_dir_abs).as_posix().split('#')[0]
-                except ValueError:
-                    continue
-                target_correct = numbering_map.get(lookup_key)
-            if not target_correct:
-                continue
-
-            m = chapter_pattern.match(current_span_text)
-            if not m:
-                continue
-            keyword_prefix = m.group(1) or ''
-            existing_number = current_span_text[len(keyword_prefix):]
-            if existing_number == target_correct or existing_number.startswith(target_correct + '.'):
-                continue
-            rest = m.group(3)
-            new_text = f"{keyword_prefix}{target_correct}{rest}"
-            if new_text != current_span_text:
-                number_span.string = new_text
 
         # Determine the incorrect number from the first section found
         first_section = soup.select_one('section[data-number]')
