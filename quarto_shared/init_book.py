@@ -61,7 +61,13 @@ def create_quarto_yml(project_dir: Path, title: str, port: int) -> None:
             code-fold: true
             html-math-method:
               method: mathjax
-              url: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js
+              # tex-chtml, not tex-svg: Quarto's crossref hover previews re-typeset
+              # math outside the live layout, and SVG output cannot compute its
+              # sizes there, so the popup fills with giant overlapping glyphs.
+              # -full, not plain tex-chtml: the plain bundle fetches
+              # [tex]/boldsymbol from the CDN lazily while typesetting, and when
+              # that does not land \boldsymbol (and \bm) prints as red literal text.
+              url: https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js
             header-includes: |
               <link href='https://fonts.googleapis.com/css?family=Vollkorn' rel='stylesheet'>
               <link rel="stylesheet" type="text/css" href="https://cdn.rawgit.com/dreampulse/computer-modern-web-font/master/fonts.css">
