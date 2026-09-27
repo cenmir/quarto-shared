@@ -12,13 +12,27 @@ $headings-color: #d5d69d;
     color: #d5d69d !important;
 }
 
+// Inactive entries a step below white, so that white, weight, a bar and a tint in the
+// sidebar green all mark the open chapter. The negative margin keeps the text where it
+// was and puts the bar just left of it.
 .sidebar-section .sidebar-link {
-    color: #fff;
+    color: #d6d6d6;
+    // color: #fff;
 }
 
 div.sidebar-item-container .sidebar-link.active {
     color: #fff;
     font-weight: bold;
+    // background: rgba(201, 255, 191, 0.10);
+    // box-shadow: inset 3px 0 0 #c9ffbf;
+    // border-radius: 3px;
+    // margin-left: -0.5rem;
+    // padding-left: 0.5rem;
+}
+
+// Quarto colours the chapter number with its own rule, so it does not follow the link
+div.sidebar-item-container .sidebar-link.active .chapter-number {
+    color: #fff;
 }
 
 figcaption {

@@ -60,3 +60,13 @@ figcaption {
     /* Dark, desaturated version of the hue for high contrast */
     color: hsl(159, 40%, 20%);
 }
+
+// The open chapter in the sidebar: a bar and a tint in the theme's navy, as in dark mode.
+div.sidebar-item-container .sidebar-link.active {
+    font-weight: bold;
+    background: rgba(44, 62, 80, 0.07);
+    box-shadow: inset 3px 0 0 #2c3e50;
+    border-radius: 3px;
+    margin-left: -0.5rem;
+    padding-left: 0.5rem;
+}
