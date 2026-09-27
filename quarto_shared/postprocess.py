@@ -112,7 +112,9 @@ def _rewrite_xrefs(soup, file_path: Path, book_dir_abs: Path,
     # (this page's correct_number for intra-page, numbering_map[target]
     # for cross-page). Idempotent: skips xrefs whose chapter already
     # matches target_correct.
-    chapter_pattern = re.compile(r'^([A-Za-z\.]+[\s\xa0]+)?(\d+)((?:\.\d+)*)$')
+    # an optional subfigure letter follows the number: "Figure 26.5 (a)"
+    chapter_pattern = re.compile(
+        r'^([A-Za-z\.]+[\s\xa0]+)?(\d+)((?:\.\d+)*)([\s\xa0]*\([a-z]+\))?$')
     for xref in soup.select('a.quarto-xref'):
         href = xref.get('href')
         if not href:
@@ -138,11 +140,12 @@ def _rewrite_xrefs(soup, file_path: Path, book_dir_abs: Path,
         if not m:
             continue
         keyword_prefix = m.group(1) or ''
-        existing_number = current_span_text[len(keyword_prefix):]
+        subfloat = m.group(4) or ''
+        existing_number = current_span_text[len(keyword_prefix):len(current_span_text) - len(subfloat)]
         if existing_number == target_correct or existing_number.startswith(target_correct + '.'):
             continue
         rest = m.group(3)
-        new_text = f"{keyword_prefix}{target_correct}{rest}"
+        new_text = f"{keyword_prefix}{target_correct}{rest}{subfloat}"
         if new_text != current_span_text:
             number_span.string = new_text
 
