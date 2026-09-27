@@ -289,3 +289,24 @@ h1, h2, h3, h4, h5, h6 {
 .ansi-yellow-intense-fg {
     color: #808000 !important;
 }
+
+// The site footer (footer.html): the licence line and the last-modified date, kept
+// quieter than the page navigation above it, links included.
+.site-footer {
+    text-align: center;
+    padding: 10px;
+    font-size: 0.85rem;
+    opacity: 0.45;
+}
+
+.site-footer a {
+    color: inherit;
+    text-decoration: underline;
+}
+
+.site-footer .cc-icons svg {
+    width: 1.15em;
+    height: 1.15em;
+    vertical-align: -0.2em;
+    margin-right: 0.1em;
+}
