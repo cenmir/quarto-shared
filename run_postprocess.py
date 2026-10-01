@@ -43,4 +43,11 @@ if raw_files:
             p = project_root / p
         files.append(p.resolve())
 
-sys.exit(0 if postprocess.run(project_root, book_dir, files=files) else 1)
+ok = postprocess.run(project_root, book_dir, files=files)
+
+# After the renumbering, so the llms.txt pages carry the same numbers as the HTML.
+# A no-op unless the project sets `website: llms-txt: true`.
+from quarto_shared import llms
+llms.rebuild(book_dir, files=files)
+
+sys.exit(0 if ok else 1)
