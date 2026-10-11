@@ -24,6 +24,8 @@ SYNC_MAP = {
         "hint.lua",
         "color-emphasis.lua",
         "lastModified.lua",
+        "media.lua",
+        "sv-term.lua",
     ],
     "includes": [
         "footer.html",

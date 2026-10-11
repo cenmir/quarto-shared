@@ -310,3 +310,51 @@ h1, h2, h3, h4, h5, h6 {
     vertical-align: -0.2em;
     margin-right: 0.1em;
 }
+
+// The line under an embedded marimo notebook ({{< marimo >}} shortcode)
+.marimo-embed { margin: 1rem 0; }
+.marimo-links {
+    font-size: 0.85em;
+    text-align: right;
+    margin: 0.2rem 0 0;
+    opacity: 0.85;
+}
+
+// Answers to problems: blurred until the reader hovers over them, or taps them.
+.answer {
+    filter: blur(0.3rem);
+    transition: filter 0.3s;
+    cursor: pointer;
+}
+
+.answer:hover, .answer:focus, .answer:focus-within {
+    filter: none;
+}
+
+// Swedish terms ([pitch circle]{sv="delningscirkel"}, filters/sv-term.lua): the English term
+// in its own colour with a dotted underline; hover or tap shows the Swedish term.
+.sv-term {
+    position: relative;
+    color: var(--sv-term-color);
+    text-decoration: underline dotted;
+    text-underline-offset: 0.2em;
+    cursor: help;
+}
+.sv-term .sv-tip {
+    display: none;
+    position: absolute;
+    left: 0;
+    bottom: 1.6em;
+    z-index: 20;
+    padding: 0.15em 0.5em;
+    border-radius: 4px;
+    font-size: 0.85em;
+    white-space: nowrap;
+    color: var(--bs-body-color);
+    background: var(--bs-body-bg);
+    border: 1px solid var(--sv-term-color);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+.sv-term:hover .sv-tip, .sv-term:focus .sv-tip {
+    display: inline-block;
+}

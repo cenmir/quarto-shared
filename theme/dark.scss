@@ -157,3 +157,6 @@ figcaption {
     text-align: center;
     color: $body-color !important;
 }
+
+// English terms with a Swedish translation (sv-term.lua, custom.scss)
+.sv-term { --sv-term-color: #5fd3c4; }
