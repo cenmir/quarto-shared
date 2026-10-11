@@ -26,28 +26,41 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from quarto_shared import postprocess
 
-project_root = Path(os.environ.get("QUARTO_PROJECT_ROOT", ".")).resolve()
-book_dir = (project_root / os.environ.get("QUARTO_PROJECT_OUTPUT_DIR", "_book")).resolve()
 
-raw_files = os.environ.get("QUARTO_PROJECT_OUTPUT_FILES", "").strip()
-files = None
-if raw_files:
-    # Quarto's paths can be project-relative or absolute; normalize both.
-    files = []
-    for entry in raw_files.splitlines():
-        entry = entry.strip()
-        if not entry:
-            continue
-        p = Path(entry)
-        if not p.is_absolute():
-            p = project_root / p
-        files.append(p.resolve())
+def main():
+    project_root = Path(os.environ.get("QUARTO_PROJECT_ROOT", ".")).resolve()
+    book_dir = (project_root / os.environ.get("QUARTO_PROJECT_OUTPUT_DIR", "_book")).resolve()
 
-ok = postprocess.run(project_root, book_dir, files=files)
+    raw_files = os.environ.get("QUARTO_PROJECT_OUTPUT_FILES", "").strip()
+    files = None
+    if raw_files:
+        # Quarto's paths can be project-relative or absolute; normalize both.
+        files = []
+        for entry in raw_files.splitlines():
+            entry = entry.strip()
+            if not entry:
+                continue
+            p = Path(entry)
+            if not p.is_absolute():
+                p = project_root / p
+            files.append(p.resolve())
 
-# After the renumbering, so the llms.txt pages carry the same numbers as the HTML.
-# A no-op unless the project sets `website: llms-txt: true`.
-from quarto_shared import llms
-llms.rebuild(book_dir, files=files)
+    ok = postprocess.run(project_root, book_dir, files=files)
 
-sys.exit(0 if ok else 1)
+    # After the renumbering, so the llms.txt pages carry the same numbers as the HTML.
+    # A no-op unless the project sets `website: llms-txt: true`.
+    from quarto_shared import llms
+    llms.rebuild(book_dir, files=files)
+
+    # Quarto moves each page's <name>_files/ folder into the output whole; the PNGs
+    # that media.lua replaced with WebP would be deployed unused.
+    from quarto_shared import media
+    media.prune(book_dir, files)
+
+    sys.exit(0 if ok else 1)
+
+
+# postprocess and llms run their pages in a process pool; a pool that spawns its
+# workers re-imports this script, which must then not run the hook again
+if __name__ == "__main__":
+    main()

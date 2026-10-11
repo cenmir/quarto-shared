@@ -19,10 +19,16 @@ a link to what it showed.
 import re
 import shutil
 import subprocess
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Iterable, Optional
 
 from bs4 import BeautifulSoup
+
+try:
+    from tqdm import tqdm
+except ImportError:
+    tqdm = None
 
 MATH_LUA = Path(__file__).resolve().parent.parent / "filters" / "llms-math.lua"
 
@@ -87,6 +93,20 @@ def _fix_index(book_dir: Path) -> None:
     index.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _convert(md: Path, pandoc: Path, llms_lua: Path) -> Optional[str]:
+    """Rewrite one .llms.md from its finished HTML page. Returns a warning on failure."""
+    html = md.with_name(md.name.replace(".llms.md", ".html"))
+    result = subprocess.run(
+        [str(pandoc), "-f", "html", "-t", TARGET, "--wrap=none",
+         "--lua-filter", str(MATH_LUA), "--lua-filter", str(llms_lua)],
+        input=_main_html(html.read_text(encoding="utf-8")),
+        capture_output=True, text=True)
+    if result.returncode != 0:
+        return f"  Warning: llms conversion failed for {html.name}: {result.stderr.strip()}"
+    md.write_text(result.stdout, encoding="utf-8")
+    return None
+
+
 def rebuild(book_dir: Path, files: Optional[Iterable[Path]] = None) -> int:
     """Reconvert the .llms.md of every page in `files` (all pages when None).
 
@@ -107,17 +127,19 @@ def rebuild(book_dir: Path, files: Optional[Iterable[Path]] = None) -> int:
         pages = [Path(f).with_suffix(".llms.md") for f in files if Path(f).suffix == ".html"]
         pages = [p for p in pages if p.exists()]
 
-    for md in pages:
-        html = md.with_name(md.name.replace(".llms.md", ".html"))
-        result = subprocess.run(
-            [str(pandoc), "-f", "html", "-t", TARGET, "--wrap=none",
-             "--lua-filter", str(MATH_LUA), "--lua-filter", str(llms_lua)],
-            input=_main_html(html.read_text(encoding="utf-8")),
-            capture_output=True, text=True)
-        if result.returncode != 0:
-            print(f"  Warning: llms conversion failed for {html.name}: {result.stderr.strip()}")
-            continue
-        md.write_text(result.stdout, encoding="utf-8")
+    bar = tqdm(total=len(pages), desc="  llms pages", unit="file", leave=False,
+               disable=None) if tqdm else None
+    # one pandoc per page; the pages are independent, so run them side by side
+    with ProcessPoolExecutor() as pool:
+        jobs = [pool.submit(_convert, md, pandoc, llms_lua) for md in pages]
+        for job in as_completed(jobs):
+            warning = job.result()
+            if warning:
+                (bar.write if bar else print)(warning)
+            if bar:
+                bar.update()
+    if bar:
+        bar.close()
 
     _fix_index(book_dir)
     return len(pages)

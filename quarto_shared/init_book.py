@@ -48,6 +48,7 @@ def create_quarto_yml(project_dir: Path, title: str, port: int) -> None:
         # These files come from quarto-shared via ./publish.py --sync
         filters:
           - lastModified.lua
+          - media.lua   # WebP for HTML, full resolution for PDF; cache in _mediacache/
 
         format:
           html:
@@ -205,6 +206,7 @@ def create_gitignore(project_dir: Path) -> None:
         _book/
         _freeze/
         .quarto/
+        _mediacache/
 
         # Python
         __pycache__/

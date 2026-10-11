@@ -34,7 +34,8 @@ quarto-shared/
 ├── filters/            # Pandoc Lua filters
 │   ├── hint.lua        # Hint/note box filter
 │   ├── color-emphasis.lua  # Color and emphasis spans
-│   └── lastModified.lua    # Last modified date injection
+│   ├── lastModified.lua    # Last modified date injection
+│   └── media.lua       # Images per output format (WebP for HTML, full res for PDF)
 ├── includes/           # HTML includes and assets
 │   ├── footer.html     # Page footer with last modified date
 │   └── elsevier-vancouver.csl  # Citation style
@@ -43,6 +44,7 @@ quarto-shared/
     ├── sync.py         # Sync theme files to projects
     ├── build.py        # Shared incremental build logic
     ├── postprocess.py  # Fix chapter numbering for books with parts
+    ├── media.py        # Image converter behind media.lua
     └── init_book.py    # Initialize new projects
 ```
 
@@ -151,6 +153,7 @@ When you want to change styles across ALL projects:
 | `filters/hint.lua` | `project/hint.lua` | Hint box filter |
 | `filters/color-emphasis.lua` | `project/color-emphasis.lua` | Color spans |
 | `filters/lastModified.lua` | `project/lastModified.lua` | Last modified date |
+| `filters/media.lua` | `project/media.lua` | Images per output format, see [Images per format](#images-per-format) |
 | `includes/footer.html` | `project/footer.html` | Page footer |
 | `includes/elsevier-vancouver.csl` | `project/elsevier-vancouver.csl` | Citation style |
 
@@ -269,11 +272,75 @@ fixes this after each build.
 
 This runs automatically via `build.py` - no per-project configuration needed.
 
+## Images per format
+
+Sources keep their full-resolution images. `media.lua` swaps each local raster
+image (PNG, JPEG, GIF, TIFF, BMP, WebP) for a WebP at screen resolution in HTML,
+and each animated GIF for a looping, muted video: WebM (VP9, keeping any real
+transparency) with an H.264 MP4 fallback for browsers without WebM. In PDF it
+uses the full-resolution source, re-encoded to PNG only when LaTeX
+cannot read the format. SVG passes through: Quarto already turns it into PDF for
+LaTeX with `rsvg-convert`.
+
+Converted files go to `<project>/_mediacache/<name>.<key>.<ext>`, where the key
+hashes the source bytes together with the recipe. An edited image or a changed
+recipe misses the cache, so nothing stale is served, and a hit costs one file
+read and no process. The conversion itself is `quarto_shared/media.py` (Pillow),
+which the filter runs only on a miss. Add `_mediacache/` to `.gitignore`.
+
+Quarto moves each page's `<name>_files/` folder into the output whole, so the
+PNGs that Jupyter wrote for a notebook's plots would be deployed beside the WebP
+that replaced them. The post-render hook (`run_postprocess.py`) deletes those,
+through `media.prune`, after every render; only images in `<name>_files/figure-html/`
+that neither the page nor its `.llms.md` twin mentions are removed.
+
+Outside HTML the filter also strips what cannot be printed: raw HTML (YouTube
+iframes, `<video>`), video files, animated GIFs, and a figure left with only its
+caption. Each strip is logged as a warning, so the render log lists every element
+that still needs a print version.
+
+```yaml
+filters:
+  - media.lua        # project-wide, so it sees both HTML and PDF
+media:               # optional
+  max-width: 1600    # pixels across of the HTML image
+  quality: 82        # lossy WebP quality
+```
+
+`quarto preview` runs the filter on every re-render, so the HTML preview shows
+the WebP. Preview watches documents, not images: after replacing an image, save
+the chapter that shows it, and the new image gets a new key and a fresh WebP.
+
+To try the converter on one image and compare it with the source:
+
+```bash
+python ~/quarto-shared/quarto_shared/media.py convert photo.jpg /tmp/photo --target html
+```
+
+prints what it wrote (`/tmp/photo.webp`, or `keep` when WebP would not be
+smaller). `--max-width` and `--quality` take the same values as `media:` above.
+
+Before a PDF goes to a publisher, list the photos it prints below 300 ppi:
+
+```bash
+python ~/quarto-shared/quarto_shared/media.py preflight _book/Book.pdf --project .
+```
+
+The list gives page, pixels, printed resolution and source file, and the command
+exits 1 when it is not empty. Vector figures do not appear: they have no ppi.
+
+The filter runs `python3` from the environment Quarto is started in, which must
+have Pillow; set `QUARTO_SHARED_PYTHON` to use another interpreter and
+`QUARTO_SHARED_ROOT` if quarto-shared is not at `~/quarto-shared`.
+
 ## Dependencies
 
 - Python 3.8+
 - PyYAML (`pip install pyyaml`)
 - beautifulsoup4 and lxml (`pip install beautifulsoup4 lxml`) - for chapter renumbering
+- Pillow with WebP support (`uv pip install pillow`) - for `media.lua`
+- ffmpeg with libvpx-vp9 and libx264 - for animated GIFs
+- pdfimages (`poppler-utils`) - for `media.py preflight`
 - Quarto CLI
 
 ## License

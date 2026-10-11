@@ -179,6 +179,14 @@ def render_files(config: BuildConfig, files: List[Path]) -> bool:
     return success
 
 
+def has_post_render_hook(quarto_config: dict) -> bool:
+    """True when _quarto.yml runs quarto-shared's run_postprocess.py after rendering."""
+    hooks = quarto_config.get('project', {}).get('post-render') or []
+    if isinstance(hooks, str):
+        hooks = [hooks]
+    return any('run_postprocess.py' in hook for hook in hooks)
+
+
 def run_post_processing(config: BuildConfig) -> bool:
     """Run post-processing to fix chapter numbering for books with parts."""
     # Use custom post-processor if configured
@@ -204,8 +212,9 @@ def set_permissions(config: BuildConfig) -> bool:
 def deploy(config: BuildConfig) -> bool:
     """Rsync to deployment directory."""
     log(f"Deploying to {config.deploy_dir}...")
+    # one overall progress line instead of a line per copied file
     result = subprocess.run(
-        ['sudo', 'rsync', '-vart', '--delete',
+        ['sudo', 'rsync', '-a', '--delete', '--info=progress2', '--no-inc-recursive',
          str(config.book_dir) + '/', str(config.deploy_dir)]
     )
     return result.returncode == 0
@@ -321,8 +330,13 @@ def run(config: BuildConfig, options: BuildOptions = None) -> bool:
             log("DRY RUN: Would run post-processing, set permissions, and deploy")
             return True
 
-        # Post-processing (always on all files for sidebar consistency)
-        if not run_post_processing(config):
+        # The post-render hook has already processed every page Quarto rendered,
+        # and the pages it did not render were processed when they were. Without
+        # a render (--no-render, --deploy-only) or without the hook, sweep them all.
+        rendered = not (options.no_render or options.deploy_only)
+        if rendered and has_post_render_hook(quarto_config):
+            log("Post-processing done by the post-render hook")
+        elif not run_post_processing(config):
             log("ERROR: Post-processing failed!")
             return False
 
