@@ -358,3 +358,46 @@ h1, h2, h3, h4, h5, h6 {
 .sv-term:hover .sv-tip, .sv-term:focus .sv-tip {
     display: inline-block;
 }
+
+// A highlight strip in the prose, ::: {.hl}, after Bertil Nilsson's notes: no title, one
+// fact, rule or formula, centred on a tint of the book's steel blue, so a reader leafing
+// through the chapter finds the essentials first. Several per chapter, each a single bite.
+.hl {
+    margin: 1.1em 0;
+    padding: 0.55em 1em;
+    border-radius: 3px;
+    background: var(--kp-bg);
+    color: var(--bs-body-color);
+    text-align: center;
+}
+.hl p { margin: 0.15em 0; }
+.hl strong { color: var(--kp-accent); }
+
+// Cards in a grid, e.g. one per welding process: ::: {.cards} holding ::: {.card-item}
+// blocks, each an image, a bold title line and a short text.
+.cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 0.9rem;
+    margin: 1.4em 0;
+}
+.card-item {
+    border: 1px solid var(--kp-border);
+    border-radius: 6px;
+    overflow: hidden;
+    background: var(--bs-body-bg);
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+.card-item p { margin: 0.45em 0.8em; }
+.card-item p:has(> img), .card-item .quarto-figure { margin: 0; }
+.card-item img {
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    object-fit: cover;
+    display: block;
+    border-radius: 0 !important;
+    margin: 0;
+}
+.card-item figure, .card-item figcaption { margin: 0; }
+.card-item p:last-child { margin-bottom: 0.7em; }

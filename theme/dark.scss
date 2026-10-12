@@ -160,3 +160,6 @@ figcaption {
 
 // English terms with a Swedish translation (sv-term.lua, custom.scss)
 .sv-term { --sv-term-color: #5fd3c4; }
+
+// Highlight strips and cards (custom.scss): the book's steel blue, lifted for a dark page
+:root { --kp-accent: #6fb1d6; --kp-bg: rgba(35, 107, 142, 0.18); --kp-border: rgba(111, 177, 214, 0.35); }

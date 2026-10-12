@@ -73,3 +73,6 @@ div.sidebar-item-container .sidebar-link.active {
 
 // English terms with a Swedish translation (sv-term.lua, custom.scss)
 .sv-term { --sv-term-color: #1a7f74; }
+
+// Highlight strips and cards (custom.scss): the book's steel blue
+:root { --kp-accent: #236B8E; --kp-bg: #dbe9f2; --kp-border: #c9dbe6; }
