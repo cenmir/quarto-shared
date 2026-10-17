@@ -5,6 +5,7 @@ Provides the core build functionality that can be imported and customized
 by individual project publish.py scripts.
 """
 
+import re
 import yaml
 import subprocess
 import sys
@@ -14,7 +15,7 @@ from typing import List, Optional, TextIO, Callable
 from datetime import datetime
 from dataclasses import dataclass, field
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 
 # Global log file handle
 _log_file: Optional[TextIO] = None
@@ -242,6 +243,197 @@ def git_push(config: BuildConfig) -> bool:
     return result.returncode == 0
 
 
+# --- Publishing single chapters ---------------------------------------------------------
+
+_ASSET_ATTR = re.compile(r'(?:src|href|poster|data)="([^"#?]+)[^"]*"')
+
+
+def chapter_files(config: BuildConfig, source: Path) -> tuple:
+    """The files in _book/ that make up one rendered chapter.
+
+    Returns ``(files, shared, pages)``: ``files`` are the page itself, its ``.llms.md``
+    twin, its ``<stem>_files/`` folder (plots of code cells) and every local file the page
+    references inside its own folder tree (figures, videos, data); ``shared`` are the
+    other local files it references (``site_libs``, ``js``), which belong to the whole
+    site; ``pages`` are the other pages it links to.
+    """
+    page = source_to_output(config, source)
+    files, shared, pages = [page], set(), set()
+    twin = page.with_suffix('.llms.md')
+    if twin.exists():
+        files.append(twin)
+    extra = page.parent / f'{page.stem}_files'
+    if extra.is_dir():
+        files += sorted(p for p in extra.rglob('*') if p.is_file())
+    own = page.parent.resolve()
+    for ref in sorted(set(_ASSET_ATTR.findall(page.read_text(encoding='utf-8')))):
+        if ref.startswith(('http:', 'https:', 'mailto:', 'data:', '//', '/')):
+            continue
+        target = (page.parent / ref).resolve()
+        if not target.is_file():
+            continue
+        rel = os.path.relpath(target, config.book_dir)
+        if target.suffix == '.html':
+            if target != page.resolve():
+                pages.add(rel)
+        elif own not in target.parents:
+            shared.add(rel)
+        elif target not in [f.resolve() for f in files]:
+            files.append(target)
+    return files, sorted(shared), sorted(pages)
+
+
+def confirm(question: str) -> bool:
+    """Ask a yes/no question on the terminal; anything but y/yes, Ctrl+C or a closed
+    input counts as no."""
+    try:
+        answer = input(f"{question} [y/N] ")
+    except (KeyboardInterrupt, EOFError):
+        print()
+        return False
+    return answer.strip().lower() in ('y', 'yes')
+
+
+def prune_sidebar(html: str, page_rel: str, absent: List[str]) -> tuple:
+    """Remove the sidebar entries of ``html`` (the page at ``page_rel`` in _book/) that link
+    to the pages in ``absent``, and any sidebar part left empty. Returns the new html and
+    the number of entries removed. Used for a chapter published on its own while other
+    chapters listed in _quarto.yml are not on the server yet."""
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, 'lxml')
+    gone = {os.path.normpath(a) for a in absent}
+    base = os.path.dirname(page_rel)
+    removed = 0
+    for section in soup.select('#quarto-sidebar li.sidebar-item-section'):
+        num = section.select_one('span.chapter-number')
+        if num is not None:
+            section['data-part-number'] = num.get_text().strip().split('.')[0]
+    for a in soup.select('#quarto-sidebar a.sidebar-link[href]'):
+        target = os.path.normpath(os.path.join(base, a['href'].split('#')[0]))
+        if target in gone:
+            item = a.find_parent('li', class_='sidebar-item')
+            if item is not None:
+                item.decompose()
+                removed += 1
+    dropped = []                      # the numbers of the parts left empty
+    for section in soup.select('#quarto-sidebar li.sidebar-item-section'):
+        if not section.select('ul li.sidebar-item'):
+            dropped.append(section.get('data-part-number'))
+            section.decompose()
+    dropped = sorted(int(d) for d in dropped if d and d.isdigit())
+    if dropped:
+        # the parts after a dropped one move up, so their chapters get the numbers the
+        # other published pages show
+        for span in soup.select('span.chapter-number'):
+            m = re.match(r'(\d+)(\..*)?$', span.get_text().strip())
+            if m:
+                major = int(m.group(1))
+                shift = sum(1 for d in dropped if d < major)
+                if shift:
+                    span.string = f"{major - shift}{m.group(2) or ''}"
+    for section in soup.select('[data-part-number]'):
+        del section['data-part-number']
+    return str(soup), removed
+
+
+def deploy_chapters(config: BuildConfig, sources: List[Path], dry_run: bool = False,
+                    yes: bool = False) -> bool:
+    """Deploy only the given chapters from the existing _book/, without rendering.
+
+    For publishing one finished chapter while others are in progress: the chapter must
+    already be rendered (by ``quarto preview`` or ``quarto render <file>``, both of which
+    run the post-render hook). Only its own files are copied, with no ``--delete``, so
+    every other page on the server stays as it was. The other pages' sidebars and the
+    search index are not updated, so a new chapter is reachable by its link until the
+    next full publish.
+    """
+    global _log_file
+    _log_file = open(config.log_file, 'a', encoding='utf-8')
+    try:
+        log("=" * 60)
+        log("Publishing single chapters (--only)")
+        log("=" * 60)
+        quarto_config = parse_quarto_yml(config)
+        listed = {f.resolve() for f in get_book_files(config, quarto_config)}
+        all_files, prune = [], {}
+        for src in sources:
+            src = (config.project_root / src).resolve()
+            rel = src.relative_to(config.project_root)
+            page = source_to_output(config, src)
+            if src not in listed:
+                log(f"WARNING: {rel} is not listed in _quarto.yml")
+            if not page.exists():
+                log(f"ERROR: {page.relative_to(config.project_root)} does not exist; render {rel} first")
+                return False
+            if src.exists() and get_mtime(src) > get_mtime(page):
+                log(f"WARNING: {rel} is newer than its page; save it in the preview or render it first")
+            files, shared, pages = chapter_files(config, src)
+            # a shared file the server lacks (a theme rebuilt since the last full publish
+            # gives the stylesheet a new hashed name) is copied; existing ones stay
+            missing = [config.book_dir / s for s in shared if not (config.deploy_dir / s).exists()]
+            log(f"{rel}: {len(files)} file(s) of its own, {len(shared)} shared, "
+                f"links to {len(pages)} other page(s)")
+            for f in files + missing:
+                log(f"  + {os.path.relpath(f, config.book_dir)}")
+            for s in shared:
+                if config.book_dir / s not in missing:
+                    log(f"  = {s} (on the server already)")
+            absent = [s for s in pages if not (config.deploy_dir / s).exists()]
+            for s in absent:
+                log(f"  - {s}: not on the server, its sidebar entry is left out")
+            prune[page] = absent
+            all_files += files + missing
+        rel_paths = [os.path.relpath(f, config.book_dir) for f in all_files]
+        if dry_run:
+            log("DRY RUN: would copy the files above to " + str(config.deploy_dir))
+            return True
+        # stage a copy, so that the sidebar of the published page can be pruned without
+        # touching _book/, which the preview keeps serving
+        import shutil
+        import tempfile
+        stage = Path(tempfile.mkdtemp(prefix='publish-only-'))
+        for f, rel in zip(all_files, rel_paths):
+            (stage / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, stage / rel)
+        for page, absent in prune.items():
+            if absent:
+                rel = os.path.relpath(page, config.book_dir)
+                html, n = prune_sidebar((stage / rel).read_text(encoding='utf-8'), rel, absent)
+                (stage / rel).write_text(html, encoding='utf-8')
+                log(f"{rel}: {n} sidebar entr{'y' if n == 1 else 'ies'} to unpublished pages left out")
+        if not yes and not confirm(f"Publish {len(all_files)} file(s) to {config.deploy_dir}?"):
+            log("Not published: nothing was deployed")
+            shutil.rmtree(stage, ignore_errors=True)
+            return False
+        try:
+            subprocess.run(['sudo', '-v'], check=True)
+        except (KeyboardInterrupt, subprocess.CalledProcessError):
+            print()
+            log("Aborted before copying: nothing was deployed")
+            shutil.rmtree(stage, ignore_errors=True)
+            return False
+        try:
+            if subprocess.run(['sudo', 'chgrp', '-R', 'www-data', str(stage)]).returncode:
+                log("ERROR: Failed to set permissions!")
+                return False
+            result = subprocess.run(['sudo', 'rsync', '-a', '--relative'] + rel_paths
+                                    + [str(config.deploy_dir) + '/'], cwd=stage)
+        except KeyboardInterrupt:
+            print()
+            log("Interrupted during the copy: some files may be new, some old; run it again")
+            return False
+        finally:
+            subprocess.run(['sudo', 'rm', '-rf', str(stage)])
+        if result.returncode:
+            log("ERROR: Deployment failed!")
+            return False
+        log(f"Deployed {len(all_files)} file(s)")
+        return True
+    finally:
+        _log_file.close()
+        _log_file = None
+
+
 @dataclass
 class BuildOptions:
     """Options for a build run."""
@@ -251,6 +443,7 @@ class BuildOptions:
     dry_run: bool = False
     git: bool = False
     deploy_only: bool = False  # Skip render, just post-process and deploy
+    yes: bool = False          # Deploy without asking first
 
 
 def run(config: BuildConfig, options: BuildOptions = None) -> bool:
@@ -344,7 +537,10 @@ def run(config: BuildConfig, options: BuildOptions = None) -> bool:
             log("Build complete (deployment skipped via --no-deploy)")
             return True
 
-        # Set permissions and deploy
+        # Set permissions and deploy, once the user has said so
+        if not options.yes and not confirm(f"Publish _book/ to {config.deploy_dir}?"):
+            log("Not published: the build is in _book/, nothing was deployed")
+            return False
         if not set_permissions(config):
             log("ERROR: Failed to set permissions!")
             return False

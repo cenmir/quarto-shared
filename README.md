@@ -104,7 +104,23 @@ Options:
 ./publish.py --git        # Push to git after build
 ./publish.py --sync       # Sync theme files only (no build)
 ./publish.py --no-sync-check  # Skip sync check before building
+./publish.py --only Part/chapter.ipynb [...]  # Deploy only these rendered chapters
+./publish.py -y ...       # Do not ask before copying to the server
 ```
+
+`--only` publishes finished chapters while others are still in progress. It renders
+nothing: each chapter must already be rendered into `_book/` (by `quarto preview` or
+`quarto render <file>`, which run the post-render hook), so it is safe while the preview
+runs. It copies the page, its `.llms.md` twin, its `<stem>_files/` folder and the files it
+references inside its own folder, plus any shared file (`site_libs`, `js`) the server
+lacks, without `--delete`; every other page on the server stays as it was. The other
+pages' sidebars and the search index are not updated, so a new chapter is reachable by its
+link until the next full publish. Sidebar entries for pages that are not on the server
+yet (chapters registered in `_quarto.yml` but unpublished) are left out of the published
+copy, an emptied part with them, and the parts after it keep the numbers the live site
+shows; `_book/` itself is not changed. Every publish asks before it copies anything to
+the server (`-y` skips the question), and Ctrl+C before the copy deploys nothing. Add
+`--dry-run` to see the file list first.
 
 ### Sync Behavior
 
