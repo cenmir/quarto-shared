@@ -106,8 +106,7 @@ Options:
 ./publish.py --no-sync-check  # Skip sync check before building
 ./publish.py --only Part/chapter.ipynb [...]  # Deploy only these rendered chapters
 ./publish.py -y ...       # Do not ask before copying to the server
-./publish.py --exclude Part [...]  # Leave parts or chapters out (default: the project's EXCLUDE)
-./publish.py --publish-all         # Publish everything, ignoring EXCLUDE
+./publish.py --exclude Part [...]  # Leave parts or chapters out of the published book
 ```
 
 `--only` publishes finished chapters while others are still in progress. It renders
@@ -124,8 +123,8 @@ shows; `_book/` itself is not changed. Every publish asks before it copies anyth
 the server (`-y` skips the question), and Ctrl+C before the copy deploys nothing. Add
 `--dry-run` to see the file list first.
 
-`--exclude` keeps parts that are not ready off the site, with `EXCLUDE` in the project's
-`publish.py` as the default list (folders such as `Mechanisms` or single chapters). The
+`--exclude` keeps parts that are not ready off the site (folders such as `Mechanisms`, or
+single chapters), and has to be given on every publish that should leave them out. The
 render runs on a temporary `_quarto.yml` without them, so the published sidebar has no
 entries for them, the later parts keep consecutive numbers in titles, figures and
 equations, and the search index leaves them out; the original `_quarto.yml` is put back
