@@ -401,3 +401,18 @@ h1, h2, h3, h4, h5, h6 {
 }
 .card-item figure, .card-item figcaption { margin: 0; }
 .card-item p:last-child { margin-bottom: 0.7em; }
+
+// Scrollbars: thin, and hidden until the pointer is over the element, in the theme's --sb-*
+// colours (dark.scss, light.scss). Wheel and trackpad scrolling happen under the pointer, so
+// the bar shows whenever it is used; touch screens draw their own overlay bars. :hover also
+// matches html while the pointer is in the window, so the page bar stays visible and only the
+// sidebar, the table of contents and wide code blocks hide theirs. The standard properties
+// serve Chrome and Edge 121+ and Firefox; Safari reads the webkit rules. scrollbar-color
+// inherits and scrollbar-width does not, hence the universal selectors.
+* { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+*:hover { scrollbar-color: var(--sb-thumb) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
+:hover::-webkit-scrollbar-thumb { background: var(--sb-thumb); }
+::-webkit-scrollbar-thumb:hover { background: var(--sb-thumb-hover); }

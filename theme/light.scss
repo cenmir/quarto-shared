@@ -76,3 +76,6 @@ div.sidebar-item-container .sidebar-link.active {
 
 // Highlight strips and cards (custom.scss): the book's steel blue
 :root { --kp-accent: #236B8E; --kp-bg: #dbe9f2; --kp-border: #c9dbe6; }
+
+// Scrollbars (custom.scss)
+:root { color-scheme: light; --sb-thumb: #c4c4c4; --sb-thumb-hover: #9a9a9a; }
