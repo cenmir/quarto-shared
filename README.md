@@ -106,6 +106,8 @@ Options:
 ./publish.py --no-sync-check  # Skip sync check before building
 ./publish.py --only Part/chapter.ipynb [...]  # Deploy only these rendered chapters
 ./publish.py -y ...       # Do not ask before copying to the server
+./publish.py --exclude Part [...]  # Leave parts or chapters out (default: the project's EXCLUDE)
+./publish.py --publish-all         # Publish everything, ignoring EXCLUDE
 ```
 
 `--only` publishes finished chapters while others are still in progress. It renders
@@ -121,6 +123,18 @@ copy, an emptied part with them, and the parts after it keep the numbers the liv
 shows; `_book/` itself is not changed. Every publish asks before it copies anything to
 the server (`-y` skips the question), and Ctrl+C before the copy deploys nothing. Add
 `--dry-run` to see the file list first.
+
+`--exclude` keeps parts that are not ready off the site, with `EXCLUDE` in the project's
+`publish.py` as the default list (folders such as `Mechanisms` or single chapters). The
+render runs on a temporary `_quarto.yml` without them, so the published sidebar has no
+entries for them, the later parts keep consecutive numbers in titles, figures and
+equations, and the search index leaves them out; the original `_quarto.yml` is put back
+with its own modification time. The rsync passes `--exclude` with `--delete-excluded`, so
+an excluded part that was published before is taken down. `_book/.publish-exclude.json`
+records what the last publish render left out; when that differs, or when the preview
+has rendered pages since, the next publish does a full render, and `--deploy-only` refuses.
+A render that excludes refuses to start while `quarto preview` runs in the project, since
+the preview watches `_quarto.yml` and serves `_book/`. `--only` refuses excluded chapters.
 
 ### Sync Behavior
 

@@ -10,12 +10,15 @@ import yaml
 import subprocess
 import sys
 import os
+import json
+import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, TextIO, Callable
 from datetime import datetime
 from dataclasses import dataclass, field
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 
 # Global log file handle
 _log_file: Optional[TextIO] = None
@@ -91,6 +94,129 @@ def get_book_files(config: BuildConfig, quarto_config: dict) -> List[Path]:
 
     extract(chapters)
     return files
+
+
+def is_excluded(rel: str, exclude: List[str]) -> bool:
+    """True when the project-relative path ``rel`` is one of ``exclude`` or lies under one
+    of them (an entry ``Mechanisms`` or ``Mechanisms/`` excludes the whole folder)."""
+    rel = rel.replace(os.sep, '/')
+    for e in exclude:
+        e = e.replace(os.sep, '/').rstrip('/')
+        if rel == e or rel.startswith(e + '/'):
+            return True
+    return False
+
+
+_CHAPTER_LINE = re.compile(r'^\s*-\s+(?:file:\s*)?["\']?([^"\'#\s]+\.(?:qmd|ipynb|md))["\']?\s*(?:#.*)?$')
+_PART_LINE = re.compile(r'^(\s*)-\s+part:')
+
+
+def exclude_from_quarto_yml(text: str, exclude: List[str]) -> str:
+    """The text of _quarto.yml without the excluded chapters, and without every part whose
+    chapters are all excluded. Works on the text so that comments, quoting and YAML 1.2
+    scalars stay as Quarto reads them; the result is checked by parsing it."""
+    lines = text.splitlines(keepends=True)
+    out, i = [], 0
+    while i < len(lines):
+        m = _PART_LINE.match(lines[i])
+        if m:
+            indent = len(m.group(1))
+            j = i + 1
+            while j < len(lines) and (not lines[j].strip()
+                                      or len(lines[j]) - len(lines[j].lstrip()) > indent):
+                j += 1
+            block = lines[i:j]
+            files = [c.group(1) for c in map(_CHAPTER_LINE.match, block) if c]
+            if files and all(is_excluded(f, exclude) for f in files):
+                trailing = [l for l in block[::-1] if not l.strip()]   # keep the blank lines
+                out += trailing[:1]
+                i = j
+                continue
+            out.append(lines[i])
+            i += 1
+            continue
+        c = _CHAPTER_LINE.match(lines[i])
+        if c and is_excluded(c.group(1), exclude):
+            i += 1
+            continue
+        out.append(lines[i])
+        i += 1
+    return ''.join(out)
+
+
+def preview_running(config: BuildConfig) -> bool:
+    """True when a ``quarto preview`` of this project is running (it serves _book/ and
+    watches _quarto.yml)."""
+    try:
+        pids = subprocess.run(['pgrep', '-f', 'quarto preview'], capture_output=True,
+                              text=True).stdout.split()
+    except FileNotFoundError:
+        return False
+    for pid in pids:
+        try:
+            if Path(os.readlink(f'/proc/{pid}/cwd')).resolve() == config.project_root:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+EXCLUDE_MARKER = '.publish-exclude.json'
+
+
+def exclusion_state(config: BuildConfig) -> Optional[dict]:
+    """What the last render by publish left out, and when it finished, or None."""
+    try:
+        return json.loads((config.book_dir / EXCLUDE_MARKER).read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+
+
+def write_exclusion_state(config: BuildConfig, exclude: List[str]):
+    (config.book_dir / EXCLUDE_MARKER).write_text(
+        json.dumps({'exclude': sorted(exclude), 'time': time.time()}), encoding='utf-8')
+
+
+def exclusion_stale(config: BuildConfig, exclude: List[str]) -> str:
+    """Why _book/ cannot be published as it is with ``exclude``, or '' when it can: the
+    last render left out something else, or a page was rendered since (by the preview,
+    with the full _quarto.yml), or excluded pages are present."""
+    state = exclusion_state(config)
+    if not exclude and not (state and state['exclude']):
+        return ''
+    if sorted(exclude) != (state or {}).get('exclude', []):
+        return "the last render left out " + (', '.join(state['exclude']) if state and state['exclude'] else 'nothing')
+    t0 = state['time'] + 5
+    for html in config.book_dir.rglob('*.html'):
+        rel = html.relative_to(config.book_dir).as_posix()
+        if is_excluded(rel, exclude):
+            return f"{rel} is in _book/ (rendered by the preview)"
+        if get_mtime(html) > t0:
+            return f"{rel} was rendered after the last publish render (by the preview?)"
+    return ''
+
+
+@contextmanager
+def quarto_yml_without(config: BuildConfig, exclude: List[str]):
+    """Replace _quarto.yml by a copy without the excluded chapters for the duration of the
+    block, and put the original back afterwards, with its own modification time so that
+    the incremental build does not see a change."""
+    if not exclude:
+        yield
+        return
+    original = config.quarto_yml.read_bytes()
+    stat = config.quarto_yml.stat()
+    text = exclude_from_quarto_yml(original.decode('utf-8'), exclude)
+    left = [f for f in get_book_files(config, yaml.safe_load(text))
+            if is_excluded(f.relative_to(config.project_root).as_posix(), exclude)]
+    if left:
+        raise RuntimeError(f"could not remove {left[0]} from _quarto.yml")
+    try:
+        config.quarto_yml.write_text(text, encoding='utf-8')
+        yield
+    finally:
+        config.quarto_yml.write_bytes(original)
+        os.utime(config.quarto_yml, ns=(stat.st_atime_ns, stat.st_mtime_ns))
 
 
 def source_to_output(config: BuildConfig, source: Path) -> Path:
@@ -210,13 +336,20 @@ def set_permissions(config: BuildConfig) -> bool:
     return result.returncode == 0
 
 
-def deploy(config: BuildConfig) -> bool:
-    """Rsync to deployment directory."""
+def deploy(config: BuildConfig, exclude: List[str] = ()) -> bool:
+    """Rsync to deployment directory. Excluded paths are neither copied nor kept on the
+    server (``--delete-excluded``), so a part that was published before is taken down."""
     log(f"Deploying to {config.deploy_dir}...")
+    filters = []
+    for e in list(exclude) + [EXCLUDE_MARKER]:
+        e = e.replace(os.sep, '/').rstrip('/')
+        filters += ['--exclude', '/' + e]
+    if exclude:
+        filters.append('--delete-excluded')
     # one overall progress line instead of a line per copied file
     result = subprocess.run(
-        ['sudo', 'rsync', '-a', '--delete', '--info=progress2', '--no-inc-recursive',
-         str(config.book_dir) + '/', str(config.deploy_dir)]
+        ['sudo', 'rsync', '-a', '--delete', '--info=progress2', '--no-inc-recursive']
+        + filters + [str(config.book_dir) + '/', str(config.deploy_dir)]
     )
     return result.returncode == 0
 
@@ -337,7 +470,7 @@ def prune_sidebar(html: str, page_rel: str, absent: List[str]) -> tuple:
 
 
 def deploy_chapters(config: BuildConfig, sources: List[Path], dry_run: bool = False,
-                    yes: bool = False) -> bool:
+                    yes: bool = False, exclude: List[str] = ()) -> bool:
     """Deploy only the given chapters from the existing _book/, without rendering.
 
     For publishing one finished chapter while others are in progress: the chapter must
@@ -359,6 +492,9 @@ def deploy_chapters(config: BuildConfig, sources: List[Path], dry_run: bool = Fa
         for src in sources:
             src = (config.project_root / src).resolve()
             rel = src.relative_to(config.project_root)
+            if is_excluded(rel.as_posix(), exclude):
+                log(f"ERROR: {rel} is excluded from publishing ({', '.join(exclude)})")
+                return False
             page = source_to_output(config, src)
             if src not in listed:
                 log(f"WARNING: {rel} is not listed in _quarto.yml")
@@ -444,6 +580,7 @@ class BuildOptions:
     git: bool = False
     deploy_only: bool = False  # Skip render, just post-process and deploy
     yes: bool = False          # Deploy without asking first
+    exclude: List[str] = field(default_factory=list)   # paths left out of the published book
 
 
 def run(config: BuildConfig, options: BuildOptions = None) -> bool:
@@ -469,9 +606,24 @@ def run(config: BuildConfig, options: BuildOptions = None) -> bool:
         quarto_config = parse_quarto_yml(config)
         book_files = get_book_files(config, quarto_config)
         log(f"Found {len(book_files)} book files in _quarto.yml")
+        exclude = list(options.exclude)
+        if exclude:
+            book_files = [f for f in book_files
+                          if not is_excluded(f.relative_to(config.project_root).as_posix(), exclude)]
+            log(f"Leaving out {', '.join(exclude)}: {len(book_files)} book files are published")
+        stale = exclusion_stale(config, exclude)
+        rendering = not (options.no_render or options.deploy_only)
+        if exclude and rendering and not options.dry_run and preview_running(config):
+            log("ERROR: quarto preview is running. A render that leaves out parts swaps "
+                "_quarto.yml and rewrites _book/; stop the preview first")
+            return False
 
         # Skip rendering if --no-render or --deploy-only is set
-        if options.no_render or options.deploy_only:
+        if not rendering and stale:
+            log(f"ERROR: _book/ cannot be published without {', '.join(exclude)}: {stale}. "
+                "Run without --deploy-only/--no-render")
+            return False
+        if not rendering:
             log("Skipping quarto render" + (" (--deploy-only)" if options.deploy_only else " (--no-render)"))
             # Prompt for sudo password upfront if deploying
             if not options.no_deploy:
@@ -481,6 +633,9 @@ def run(config: BuildConfig, options: BuildOptions = None) -> bool:
             if options.full:
                 do_full_rebuild = True
                 reason = "Forced via --full flag"
+            elif stale:
+                do_full_rebuild = True
+                reason = f"Leaving out {', '.join(exclude)}, and {stale}"
             else:
                 do_full_rebuild, reason = needs_full_rebuild(config, book_files)
 
@@ -492,9 +647,20 @@ def run(config: BuildConfig, options: BuildOptions = None) -> bool:
                     # Prompt for sudo password upfront
                     if not options.no_deploy:
                         subprocess.run(['sudo', '-v'])
-                    if not render_full(config):
+                    with quarto_yml_without(config, exclude):
+                        ok = render_full(config)
+                    if not ok:
                         log("ERROR: Full render failed!")
                         return False
+                    # pages of the excluded parts left in _book/ by earlier renders
+                    import shutil
+                    for e in exclude:
+                        target = config.book_dir / e.rstrip('/')
+                        if target.is_dir():
+                            shutil.rmtree(target)
+                        for page in config.book_dir.glob(e.rstrip('/') + '.*'):
+                            page.unlink()
+                    write_exclusion_state(config, exclude)
             else:
                 changed = find_changed_files(config, book_files)
                 if not changed:
@@ -515,9 +681,12 @@ def run(config: BuildConfig, options: BuildOptions = None) -> bool:
                         # Prompt for sudo password upfront
                         if not options.no_deploy:
                             subprocess.run(['sudo', '-v'])
-                        if not render_files(config, changed):
+                        with quarto_yml_without(config, exclude):
+                            ok = render_files(config, changed)
+                        if not ok:
                             log("ERROR: Incremental render failed!")
                             return False
+                        write_exclusion_state(config, exclude)
 
         if options.dry_run:
             log("DRY RUN: Would run post-processing, set permissions, and deploy")
@@ -529,9 +698,13 @@ def run(config: BuildConfig, options: BuildOptions = None) -> bool:
         rendered = not (options.no_render or options.deploy_only)
         if rendered and has_post_render_hook(quarto_config):
             log("Post-processing done by the post-render hook")
-        elif not run_post_processing(config):
-            log("ERROR: Post-processing failed!")
-            return False
+        else:
+            # the renumbering reads _quarto.yml, so it sees the same chapters as the render
+            with quarto_yml_without(config, exclude):
+                ok = run_post_processing(config)
+            if not ok:
+                log("ERROR: Post-processing failed!")
+                return False
 
         if options.no_deploy:
             log("Build complete (deployment skipped via --no-deploy)")
@@ -545,7 +718,7 @@ def run(config: BuildConfig, options: BuildOptions = None) -> bool:
             log("ERROR: Failed to set permissions!")
             return False
 
-        if not deploy(config):
+        if not deploy(config, exclude):
             log("ERROR: Deployment failed!")
             return False
 
