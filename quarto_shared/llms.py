@@ -126,6 +126,9 @@ def rebuild(book_dir: Path, files: Optional[Iterable[Path]] = None) -> int:
     else:
         pages = [Path(f).with_suffix(".llms.md") for f in files if Path(f).suffix == ".html"]
         pages = [p for p in pages if p.exists()]
+    # an .llms.md whose page is gone (a renamed or deleted chapter) is left over from an
+    # earlier build; there is no HTML to convert it from
+    pages = [p for p in pages if p.with_name(p.name.replace(".llms.md", ".html")).exists()]
 
     bar = tqdm(total=len(pages), desc="  llms pages", unit="file", leave=False,
                disable=None) if tqdm else None
