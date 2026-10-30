@@ -31,3 +31,14 @@ function Div(el)
   end
 
 end
+
+-- Headings that open a worked example ("## Example 3: ...", "### Exempel 2") get the class
+-- example, which Quarto carries to the enclosing <section>, so custom.scss can mark the whole
+-- example however its id was set.
+function Header(el)
+  local text = pandoc.utils.stringify(el.content)
+  if (text:match("^Example") or text:match("^Exempel")) and not el.classes:includes("example") then
+    el.classes:insert("example")
+  end
+  return el
+end

@@ -94,17 +94,6 @@ img[src$=".svg"] {
 }
 
 
-.important{
-    //background-color: rgb(190, 190, 0);
-    //border-color: rgb(122, 122, 0);
-    //border-width: 3px;
-    border-radius: 5px;
-    padding: 0.5em;
-    margin: 1em 0em;
-    background: hsl(159, 58%, 27%);
-    color: hsl(0, 0%, 85%);
-
-}
 
 
 .tooltip-container {
@@ -162,7 +151,7 @@ figcaption {
 .sv-term { --sv-term-color: #5fd3c4; }
 
 // Highlight strips and cards (custom.scss): the book's steel blue, lifted for a dark page
-:root { --kp-accent: #6fb1d6; --kp-bg: rgba(35, 107, 142, 0.18); --kp-border: rgba(111, 177, 214, 0.35); }
+:root { --kp-accent: #6fb1d6; --kp-bg: rgba(35, 107, 142, 0.16); --kp-border: rgba(111, 177, 214, 0.35); }
 
 // Scrollbars (custom.scss): a grey thumb that recedes into the dark sidebar
 :root { color-scheme: dark; --sb-thumb: #4a4a4a; --sb-thumb-hover: #6a6a6a; }

@@ -51,16 +51,6 @@ figcaption {
     color: orangered;
 }
 
-.important {
-    border-radius: 5px;
-    padding: 0.5em;
-    margin: 1em 0em;
-    /* Light, pastel version of the original hue */
-    background: hsl(159, 60%, 92%);
-    /* Dark, desaturated version of the hue for high contrast */
-    color: hsl(159, 40%, 20%);
-}
-
 // The open chapter in the sidebar: a bar and a tint in the theme's navy, as in dark mode.
 div.sidebar-item-container .sidebar-link.active {
     font-weight: bold;
@@ -74,8 +64,8 @@ div.sidebar-item-container .sidebar-link.active {
 // English terms with a Swedish translation (sv-term.lua, custom.scss)
 .sv-term { --sv-term-color: #1a7f74; }
 
-// Highlight strips and cards (custom.scss): the book's steel blue
-:root { --kp-accent: #236B8E; --kp-bg: #dbe9f2; --kp-border: #c9dbe6; }
+// Highlight strips, key boxes and cards (custom.scss): the book's steel blue
+:root { --kp-accent: #236B8E; --kp-bg: #eef5fa; --kp-border: #c9dbe6; }
 
 // Scrollbars (custom.scss)
 :root { color-scheme: light; --sb-thumb: #c4c4c4; --sb-thumb-hover: #9a9a9a; }

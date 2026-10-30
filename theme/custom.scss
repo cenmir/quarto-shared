@@ -261,10 +261,39 @@ h1, h2, h3, h4, h5, h6 {
     margin-bottom: 1rem;
 }
 
-.proof.remark {
-    border-left: 2px solid rgba(128, 128, 128, 0.3);
-    padding-left: 1rem;
+// Units of content (examples, exercises, remarks) share one quiet mark: a thin rule in the
+// gutter from the label to the end mark, so the reader knows they are inside one. Neutral grey,
+// since the callouts own the coloured left bars. The negative margin keeps the text in place.
+// Examples are sections with class example, set by hint.lua from the heading text.
+:root { --unit-line: rgba(128, 128, 128, 0.3); }
+section.example, .theorem.exercise, .Remark, .proof.remark {
+    margin-left: -1.1rem;
+    padding-left: calc(1.1rem - 2px);
+    border-left: 2px solid var(--unit-line);
 }
+@media (max-width: 767px) {
+    section.example, .theorem.exercise, .Remark, .proof.remark {
+        margin-left: -0.6rem;
+        padding-left: calc(0.6rem - 2px);
+    }
+}
+section.example::after {
+    content: "◊";
+    display: block;
+    text-align: right;
+    margin-bottom: 1rem;
+}
+
+// Boxed display equations, \boxed{...}, after Meriam: the frame MathJax draws becomes the
+// steel-blue key frame of .hl, with room inside and white space around it.
+mjx-container[display="true"] mjx-menclose > mjx-box[style*="border"] {
+    border: 1.5px solid var(--kp-accent) !important;
+    border-radius: 2px;
+    padding: 0.45em 0.9em !important;
+    background: var(--kp-bg);
+}
+mjx-container[display="true"]:has(mjx-menclose) { margin: 1.6em 0 !important; }
+.hl mjx-menclose > mjx-box[style*="border"] { border: none !important; background: none; }
 
 .proof.remark::after{
     font-size: 1em;
@@ -359,19 +388,91 @@ h1, h2, h3, h4, h5, h6 {
     display: inline-block;
 }
 
-// A highlight strip in the prose, ::: {.hl}, after Bertil Nilsson's notes: no title, one
-// fact, rule or formula, centred on a tint of the book's steel blue, so a reader leafing
-// through the chapter finds the essentials first. Several per chapter, each a single bite.
+// A highlight strip in the prose, ::: {.hl}, after Bertil Nilsson's notes and Meriam's boxed
+// equations: no title, one fact, rule or formula, framed in the book's steel blue and shrunk
+// to its content with white space around it, so a reader leafing through the chapter finds
+// the essentials first. Several per chapter, each a single bite.
 .hl {
-    margin: 1.1em 0;
-    padding: 0.55em 1em;
-    border-radius: 3px;
+    display: table;
+    margin: 1.8em auto;
+    padding: 0.4em 1.6em;
+    border: 1.5px solid var(--kp-accent);
+    border-radius: 2px;
     background: var(--kp-bg);
     color: var(--bs-body-color);
     text-align: center;
 }
 .hl p { margin: 0.15em 0; }
 .hl strong { color: var(--kp-accent); }
+
+// A key concept over several paragraphs, ::: {.important}, after Meriam's key-concept frames:
+// a thin frame, a heavy top rule and a small-caps title, with wide margins so the box stands
+// apart from the prose. The title is "Key idea" unless set with label="...".
+.important {
+    margin: 2.2em 1.5em;
+    padding: 0.9em 1.3em 1em;
+    border: 1px solid var(--kp-border);
+    border-top: 3px solid var(--kp-accent);
+}
+.important::before {
+    content: "Key idea";
+    display: block;
+    margin-bottom: 0.5em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid var(--kp-border);
+    font-variant: small-caps;
+    letter-spacing: 0.06em;
+    font-size: 1.05em;
+    color: var(--kp-accent);
+}
+.important[data-label]::before { content: attr(data-label); }
+.important > :last-child { margin-bottom: 0; }
+@media (max-width: 767px) { .important { margin: 1.8em 0; } }
+
+// A procedure, ::: {.procedure label="Setting up the supply"} holding a numbered or bulleted
+// list, after Hibbeler's "Procedure for analysis": a tinted title band in the key-box frame,
+// steps numbered in filled steel-blue discs, checklist items marked with an empty square.
+// Prose is the default; this box is for steps the reader carries out in order or ticks off.
+.procedure {
+    margin: 2.2em 1.5em;
+    padding-bottom: 0.4em;
+    border: 1px solid var(--kp-border);
+    border-radius: 2px;
+}
+.procedure::before {
+    content: "Procedure";
+    display: block;
+    padding: 0.45em 1.3em;
+    background: var(--kp-bg);
+    border-bottom: 1px solid var(--kp-border);
+    font-variant: small-caps;
+    letter-spacing: 0.06em;
+    font-size: 1.05em;
+    color: var(--kp-accent);
+}
+.procedure[data-label]::before { content: attr(data-label); }
+.procedure > * { margin-left: 1.3em; margin-right: 1.3em; }
+.procedure > :first-child { margin-top: 0.8em; }
+.procedure ol, .procedure ul { list-style: none; padding-left: 0; counter-reset: step; }
+.procedure li { position: relative; padding-left: 2.3em; margin: 0.6em 0; counter-increment: step; }
+.procedure li > p { margin: 0 0 0.4em; }
+.procedure ol > li::before {
+    content: counter(step);
+    position: absolute; left: 0; top: 0.15em;
+    width: 1.6em; height: 1.6em; line-height: 1.6em;
+    border-radius: 50%;
+    background: var(--kp-accent);
+    color: var(--bs-body-bg);
+    font-size: 0.85em; font-weight: 600; text-align: center;
+}
+.procedure ul > li::before {
+    content: "";
+    position: absolute; left: 0.3em; top: 0.35em;
+    width: 0.85em; height: 0.85em;
+    border: 1.5px solid var(--kp-accent);
+    border-radius: 2px;
+}
+@media (max-width: 767px) { .procedure { margin: 1.8em 0; } }
 
 // Cards in a grid, e.g. one per welding process: ::: {.cards} holding ::: {.card-item}
 // blocks, each an image, a bold title line and a short text.
