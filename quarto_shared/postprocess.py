@@ -8,11 +8,14 @@ fixes the numbering in the generated HTML files.
 This is automatically called by build.py after rendering.
 """
 
+import json
 import re
 import yaml
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
+
+from .cache import PageCache, file_hash, version_key
 
 try:
     from bs4 import BeautifulSoup, NavigableString
@@ -115,9 +118,11 @@ def _rewrite_xrefs(soup, file_path: Path, book_dir_abs: Path,
     # (this page's correct_number for intra-page, numbering_map[target]
     # for cross-page). Idempotent: skips xrefs whose chapter already
     # matches target_correct.
-    # an optional subfigure letter follows the number: "Figure 26.5 (a)"
+    # After the number comes a subfigure letter, "Figure 26.5 (a)", or, on a
+    # link to a chapter, its title, "14\xa0 Rotation and change of basis".
     chapter_pattern = re.compile(
-        r'^([A-Za-z\.]+[\s\xa0]+)?(\d+)((?:\.\d+)*)([\s\xa0]*\([a-z]+\))?$')
+        r'^([A-Za-z\.]+[\s\xa0]+)?(\d+)((?:\.\d+)*)([\s\xa0]*\([a-z]+\)|[\s\xa0]+\D.*)?$',
+        re.S)
     for xref in soup.select('a.quarto-xref'):
         href = xref.get('href')
         if not href:
@@ -144,6 +149,13 @@ def _rewrite_xrefs(soup, file_path: Path, book_dir_abs: Path,
             continue
         keyword_prefix = m.group(1) or ''
         subfloat = m.group(4) or ''
+        fragment = href.partition('#')[2]
+        if not m.group(3) and fragment and not fragment.startswith('sec-'):
+            # A bare "1" pointing at a figure, table or equation has no chapter
+            # part: its target sits on an unnumbered page (a part page), whose
+            # captions keep Quarto's plain count. Only a chapter link carries a
+            # lone chapter number.
+            continue
         existing_number = current_span_text[len(keyword_prefix):len(current_span_text) - len(subfloat)]
         if existing_number == target_correct or existing_number.startswith(target_correct + '.'):
             continue
@@ -164,6 +176,7 @@ def post_process_html(
     book_dir: Path,
     numbering_map: Dict[str, str],
     files: Optional[Iterable[Path]] = None,
+    cache_file: Optional[Path] = None,
 ) -> bool:
     """
     Parse HTML files in _book directory and fix chapter/section numbering.
@@ -178,6 +191,9 @@ def post_process_html(
         files: Optional explicit list of HTML files to process (must be inside
             book_dir). When None, walks the entire output dir. Used by the
             post-render hook to process only the files Quarto just rendered.
+        cache_file: Optional JSON file (see cache.py) recording each page as this
+            pass left it. A page that still has those bytes is skipped, which is
+            every page but the edited one when quarto preview starts.
 
     Returns:
         True on success, False on failure
@@ -187,7 +203,16 @@ def post_process_html(
         targets = sorted(book_dir.rglob('*.html'))
     else:
         targets = [Path(f) for f in files if Path(f).suffix == '.html']
-    print(f"  Processing {len(targets)} HTML file(s)...")
+
+    # the result depends on the page, this code and the chapter numbers, nothing else
+    cache = PageCache(cache_file, 'renumber',
+                      version_key(Path(__file__), json.dumps(numbering_map, sort_keys=True)))
+    rel = {f: Path(f).resolve().relative_to(book_dir_abs).as_posix() for f in targets}
+    todo = [f for f in targets if cache.get(rel[f]) is None or cache.get(rel[f]) != file_hash(f)]
+    skipped = len(targets) - len(todo)
+    targets = todo
+    note = f" ({skipped} unchanged since the last pass)" if skipped else ""
+    print(f"  Processing {len(targets)} HTML file(s){note}...")
 
     written = 0
     if len(targets) <= 2:
@@ -206,6 +231,9 @@ def post_process_html(
         if bar:
             bar.close()
     print(f"  Rewrote {written} of {len(targets)} file(s)")
+    for f in targets:
+        cache.put(rel[f], file_hash(f))
+    cache.save()
     return True
 
 
@@ -531,7 +559,9 @@ def _process_file(file_path: Path, book_dir: Path, book_dir_abs: Path,
                 )
                 if match:
                     correct_target_number = match.group(1)
-        else:
+        elif target_id.startswith('eq-'):
+            # Only an equation: a section has no data-number under number-depth 1,
+            # and searching it would find the tag of its first equation.
             math_span = target_element.select_one('span.math[data-eq-number]')
             if math_span:
                 correct_target_number = math_span.get('data-eq-number')
@@ -628,6 +658,7 @@ def run(
     project_root: Path,
     book_dir: Path,
     files: Optional[Iterable[Path]] = None,
+    cache_file: Optional[Path] = None,
 ) -> bool:
     """
     Run post-processing on a Quarto book.
@@ -640,6 +671,8 @@ def run(
         files: Optional explicit list of HTML files to process. Used by the
             quarto preview post-render hook for incremental updates. When None,
             processes every HTML file under book_dir.
+        cache_file: Optional JSON file that lets unchanged pages be skipped;
+            see post_process_html.
 
     Returns:
         True on success (or if no post-processing needed), False on failure
@@ -659,4 +692,4 @@ def run(
         print("  No part: structure found, skipping chapter renumbering")
         return True
 
-    return post_process_html(book_dir, numbering_map, files=files)
+    return post_process_html(book_dir, numbering_map, files=files, cache_file=cache_file)

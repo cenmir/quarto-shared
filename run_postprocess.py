@@ -45,12 +45,15 @@ def main():
                 p = project_root / p
             files.append(p.resolve())
 
-    ok = postprocess.run(project_root, book_dir, files=files)
+    # what each pass has already finished; .quarto/ is never published
+    cache_file = project_root / ".quarto" / "quarto-shared-cache.json"
+
+    ok = postprocess.run(project_root, book_dir, files=files, cache_file=cache_file)
 
     # After the renumbering, so the llms.txt pages carry the same numbers as the HTML.
     # A no-op unless the project sets `website: llms-txt: true`.
     from quarto_shared import llms
-    llms.rebuild(book_dir, files=files)
+    llms.rebuild(book_dir, files=files, cache_file=cache_file)
 
     # Quarto moves each page's <name>_files/ folder into the output whole; the PNGs
     # that media.lua replaced with WebP would be deployed unused.
