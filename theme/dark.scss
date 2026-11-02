@@ -93,6 +93,12 @@ img[src$=".svg"] {
     margin-right: auto;
 }
 
+// a figure drawn without black ink reads on the dark page as it is: {.no-card}
+img[src$=".svg"].no-card {
+    background: none;
+    padding: 0;
+}
+
 
 
 
