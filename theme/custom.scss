@@ -405,6 +405,30 @@ mjx-container[display="true"]:has(mjx-menclose) { margin: 1.6em 0 !important; }
 .hl p { margin: 0.15em 0; }
 .hl strong { color: var(--kp-accent); }
 
+// A lifted statement, ::: {.lift}: one or two sentences of the argument taken out of the
+// paragraph and set large, centred and italic between two short accent rules, so the eye
+// rests on them in long prose. The text is moved there, never repeated. Use sparingly.
+.lift {
+    max-width: 30rem;
+    margin: 2.4em auto;
+    font-style: italic;
+    font-size: 1.4em;
+    line-height: 1.35;
+    text-align: center;
+    text-wrap: balance;
+}
+.lift p { margin: 0; }
+.lift::before, .lift::after {
+    content: "";
+    display: block;
+    width: 3rem;
+    height: 1px;
+    margin: 0 auto;
+    background: var(--kp-accent);
+}
+.lift::before { margin-bottom: 1rem; }
+.lift::after { margin-top: 1rem; }
+
 // A key concept over several paragraphs, ::: {.important}, after Meriam's key-concept frames:
 // a thin frame, a heavy top rule and a small-caps title, with wide margins so the box stands
 // apart from the prose. The title is "Key idea" unless set with label="...".
