@@ -89,6 +89,10 @@ def generate_numbering_map(project_root: Path) -> Optional[Dict[str, str]]:
             part_chapters = item.get('chapters', [])
             sub_chapter_counter = 1
             for sub_chapter in part_chapters:
+                # A link entry ({href, text}) is no chapter: Quarto leaves it
+                # unnumbered, so the chapters after it keep their numbers.
+                if not isinstance(sub_chapter, str):
+                    continue
                 html_file = Path(sub_chapter).with_suffix('.html').as_posix()
                 mapping[html_file] = f"{chapter_counter}.{sub_chapter_counter}"
                 sub_chapter_counter += 1
